@@ -10,9 +10,7 @@ export default function MeterSubmission() {
         /* What type of keyboard? */ keyboardType="numeric"
       ></TextInput>
       <Text style={styles.title}>Meter Reading</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Meter Reading"></TextInput>
+      <TextInput style={styles.input} placeholder="Meter Reading"></TextInput>
       <Pressable>
         <Text style={styles.button}>Submit</Text>
       </Pressable>
