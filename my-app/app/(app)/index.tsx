@@ -1,17 +1,48 @@
-import { Text, View } from 'react-native';
-import { useSession } from '../../components/auth/ctx';
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
-export default function Index() {
-  const { signOut } = useSession();
+export default function MeterSubmission() {
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <Text
-        onPress={() => {
-          // The `app/(app)/_layout.tsx` redirects to the sign-in screen.
-          signOut();
-        }}>
-        Sign Out
-      </Text>
+    <View style={styles.container}>
+      <Text style={styles.title}>House/Meter ID</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Meter ID"
+        /* What type of keyboard? */ keyboardType="numeric"
+      ></TextInput>
+      <Text style={styles.title}>Meter Reading</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Meter Reading"></TextInput>
+      <Pressable>
+        <Text style={styles.button}>Submit</Text>
+      </Pressable>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  button: {
+    backgroundColor: "#006699",
+    color: "#FFFFFF",
+    fontSize: 16,
+    paddingHorizontal: 79,
+    paddingVertical: 18,
+    borderRadius: 30,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 600,
+  },
+  input: {
+    // fix this
+    height: 40,
+    margin: 12,
+    borderWidth: 1,
+    padding: 10,
+  },
+});

@@ -17,7 +17,10 @@ function RootNavigator() {
   const { session } = useSession();
 
   return (
-    <Stack>
+    <Stack
+      screenOptions={
+        {headerShown: false,}
+      }>
       <Stack.Protected guard={!!session}>
         <Stack.Screen name="(app)" />
       </Stack.Protected>
