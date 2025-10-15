@@ -1,7 +1,7 @@
-import { Stack } from 'expo-router';
+import { Stack } from "expo-router";
 
-import { SessionProvider, useSession } from '../components/auth/ctx';
-import { SplashScreenController } from '../components/auth/splash';
+import { SessionProvider, useSession } from "../components/auth/ctx";
+import { SplashScreenController } from "../components/auth/splash";
 
 export default function Root() {
   // Set up the auth context and render your layout inside of it.
@@ -17,7 +17,7 @@ function RootNavigator() {
   const { session } = useSession();
 
   return (
-    <Stack>
+    <Stack screenOptions={{ headerShown: false }}>
       <Stack.Protected guard={!!session}>
         <Stack.Screen name="(app)" />
       </Stack.Protected>
