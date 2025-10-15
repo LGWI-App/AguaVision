@@ -14,7 +14,7 @@ jobs:
       - uses: actions/setup-node@v5
       - run: |
           yarn
-          yarn prettier . --write --ignore-unknown
+          yarn prettier **/*.{ts,tsx,js} --write --ignore-unknown
       - uses: autofix-ci/action@v1
         with:
           commit-message: "Apply Prettier format"
