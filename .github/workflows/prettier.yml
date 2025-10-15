@@ -11,7 +11,7 @@ jobs:
         working-directory: ./my-app
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v6
       - run: |
           yarn
           yarn prettier **/*.{ts,tsx,js} --write --ignore-unknown
