@@ -1,25 +1,12 @@
-import { Stack } from "expo-router";
-import { Text } from "react-native";
-import { useSession } from "../../components/auth/ctx";
+import { Tabs } from "expo-router";
 
-export default function RootLayout() {
-  const { signOut } = useSession();
+// Tabs layout for the protected (app) routes. Keep this minimal: one tab for
+// meter submission (index) and one for the community meters list.
+export default function AppLayout() {
   return (
-    <Stack
-      screenOptions={{
-        headerShown: true,
-        headerTitle: "Submit Meter Reading",
-        headerRight: () => (
-          <Text
-            onPress={() => {
-              // The `app/(app)/_layout.tsx` redirects to the sign-in screen.
-              signOut();
-            }}
-          >
-            Sign Out
-          </Text>
-        ),
-      }}
-    />
+    <Tabs screenOptions={{ headerShown: false }}>
+      <Tabs.Screen name="index" options={{ title: "Submit" }} />
+      <Tabs.Screen name="meters" options={{ title: "Meters" }} />
+    </Tabs>
   );
 }
