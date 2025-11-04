@@ -10,6 +10,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function MeterSubmission() {
+
+  
+
   return (
     <SafeAreaView style={styles.safe}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
