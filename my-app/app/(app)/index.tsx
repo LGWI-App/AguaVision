@@ -7,10 +7,13 @@ import {
   TextInput,
   TouchableWithoutFeedback,
   View,
+  ScrollView,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useState } from "react";
 import { supabase } from "../../lib/supabase";
+import { Ionicons } from "@expo/vector-icons";
 
 
 
@@ -74,6 +77,18 @@ export default function MeterSubmission() {
         LAST_READING: lastReading
       } as any;
 
+      // Update Meters table with new latest reading and last read date
+      const { error: updateError } = await supabase
+        .from("METERS")
+        .update({
+          LATEST_READING: current,
+          LAST_READ_DATE: new Date().toISOString(),
+        })
+        .eq("METER_ID", id);
+
+      if (updateError) throw updateError; 
+
+
   console.log("Submitting payload", payload, { priceRate, computedPrice, waterUsed });
   const { error: insertError } = await supabase.from("METER_READINGS").insert([payload]);
   if (insertError) throw insertError;
@@ -96,105 +111,242 @@ export default function MeterSubmission() {
       setSubmitting(false);
     }
   }
+
+
+
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.container}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={styles.container}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.headerContent}>
+              <View style={styles.iconContainer}>
+                <Ionicons name="add-circle" size={24} color="#ffffff" />
+              </View>
+              <Text style={styles.headerTitle}>Submit Reading</Text>
+            </View>
+            <Text style={styles.headerSubtitle}>
+              Enter meter information to submit a new reading
+            </Text>
+          </View>
+
+          {/* Form Card */}
           <View style={styles.card}>
-            <Text style={styles.title}>Meter ID</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Meter ID"
-              keyboardType="numeric"
-              value={meterId}
-              onChangeText={setMeterId}
-            />
+            <Text style={styles.cardTitle}>Meter Information</Text>
 
-            <Text style={styles.title}>Meter Reading</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Meter Reading"
-              keyboardType="numeric"
-              value={reading}
-              onChangeText={setReading}
-            />
+            {/* Meter ID Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Meter ID</Text>
+              <View style={styles.inputWrapper}>
+                <View style={styles.inputIcon}>
+                  <Ionicons name="water" size={20} color="#6b7280" />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter meter ID"
+                  placeholderTextColor="#9ca3af"
+                  keyboardType="numeric"
+                  value={meterId}
+                  onChangeText={setMeterId}
+                />
+              </View>
+            </View>
 
+            {/* Reading Input */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Current Reading</Text>
+              <View style={styles.inputWrapper}>
+                <View style={styles.inputIcon}>
+                  <Ionicons name="pulse-outline" size={20} color="#6b7280" />
+                </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter current reading (gallons)"
+                  placeholderTextColor="#9ca3af"
+                  keyboardType="numeric"
+                  value={reading}
+                  onChangeText={setReading}
+                />
+              </View>
+            </View>
+
+            {/* Submit Button */}
             <Pressable
               onPress={handleSubmit}
               disabled={submitting}
               style={({ pressed }) => [
                 styles.button,
                 pressed && styles.buttonPressed,
-                submitting && { opacity: 0.7 },
+                submitting && styles.buttonDisabled,
               ]}
             >
-              <Text style={styles.buttonText}>{submitting ? "Submitting..." : "Submit"}</Text>
+              {submitting ? (
+                <View style={styles.buttonContent}>
+                  <ActivityIndicator size="small" color="#ffffff" />
+                  <Text style={styles.buttonText}>Submitting...</Text>
+                </View>
+              ) : (
+                <View style={styles.buttonContent}>
+                  <Ionicons name="checkmark-circle" size={20} color="#ffffff" />
+                  <Text style={styles.buttonText}>Submit Reading</Text>
+                </View>
+              )}
             </Pressable>
           </View>
-        </View>
+
+          {/* Info Card */}
+          <View style={[styles.card, styles.infoCard]}>
+            <View style={styles.infoHeader}>
+              <Ionicons name="information-circle" size={20} color="#2563eb" />
+              <Text style={styles.infoTitle}>How it works</Text>
+            </View>
+            <Text style={styles.infoText}>
+              Enter the meter ID and current reading. The system will automatically calculate water usage and pricing based on your community's rate.
+            </Text>
+          </View>
+        </ScrollView>
       </TouchableWithoutFeedback>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: "#f5f7fb",
-  },
   container: {
     flex: 1,
-    justifyContent: "center",
+    backgroundColor: "#f0f9ff",
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+  },
+  header: {
+    marginBottom: 24,
+    paddingTop: 16,
+  },
+  headerContent: {
+    flexDirection: "row",
     alignItems: "center",
-    padding: 20,
+    gap: 12,
+    marginBottom: 8,
+  },
+  iconContainer: {
+    backgroundColor: "#2563eb",
+    padding: 8,
+    borderRadius: 12,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#1f2937",
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginLeft: 56,
   },
   card: {
-    width: "100%",
-    maxWidth: 460,
     backgroundColor: "#ffffff",
     borderRadius: 16,
     padding: 20,
+    marginBottom: 16,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1f2937",
+    marginBottom: 20,
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1f2937",
+    marginBottom: 8,
+  },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 12,
+    backgroundColor: "#ffffff",
+    overflow: "hidden",
+  },
+  inputIcon: {
+    paddingLeft: 16,
+    paddingRight: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  input: {
+    flex: 1,
+    height: 52,
+    fontSize: 16,
+    color: "#1f2937",
+    paddingRight: 16,
   },
   button: {
-    backgroundColor: "#006699",
-    paddingVertical: 14,
+    backgroundColor: "#2563eb",
+    paddingVertical: 16,
     borderRadius: 12,
     alignItems: "center",
     marginTop: 8,
-    shadowColor: "#006699",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
+    shadowColor: "#2563eb",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
   },
   buttonPressed: {
-    opacity: 0.95,
-    transform: [{ scale: 0.995 }],
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }],
+  },
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  buttonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   buttonText: {
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
   },
-  title: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#006699",
-    marginBottom: 8,
-  },
-  input: {
-    height: 48,
-    marginBottom: 16,
+  infoCard: {
+    backgroundColor: "#dbeafe",
     borderWidth: 1,
-    borderColor: "#e6eef5",
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: "#fbfdff",
+    borderColor: "#bfdbfe",
+  },
+  infoHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+  infoTitle: {
     fontSize: 16,
+    fontWeight: "600",
+    color: "#1e40af",
+  },
+  infoText: {
+    fontSize: 14,
+    color: "#1e3a8a",
+    lineHeight: 20,
   },
 });
