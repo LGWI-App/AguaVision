@@ -1,5 +1,5 @@
 // App.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import {
   StyleSheet,
@@ -10,9 +10,9 @@ import {
   RefreshControl,
   SafeAreaView,
   TouchableOpacity,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 interface MeterReading {
   idx: number;
@@ -37,16 +37,16 @@ export default function App() {
     try {
       setError(null);
       const { data: readings, error: supabaseError } = await supabase
-        .from('METER_READINGS')
-        .select('*')
-        .order('DATE_CURRENT', { ascending: true });
+        .from("METER_READINGS")
+        .select("*")
+        .order("DATE_CURRENT", { ascending: true });
 
       if (supabaseError) throw supabaseError;
 
       setData(readings || []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
-      console.error('Error fetching data:', err);
+      setError(err instanceof Error ? err.message : "An error occurred");
+      console.error("Error fetching data:", err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -64,10 +64,10 @@ export default function App() {
 
   const formatDate = (dateStr: string): string => {
     const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
     });
   };
 
@@ -102,7 +102,7 @@ export default function App() {
   const priceRate =
     latestEntry.WATER_USED > 0
       ? (latestEntry.PRICE / latestEntry.WATER_USED).toFixed(2)
-      : '0.00';
+      : "0.00";
 
   return (
     <SafeAreaView style={styles.container}>
@@ -239,13 +239,13 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f0f9ff',
+    backgroundColor: "#f0f9ff",
   },
   centerContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f0f9ff',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f0f9ff",
     padding: 20,
   },
   scrollView: {
@@ -257,26 +257,26 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#64748b',
+    color: "#64748b",
   },
   errorText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#ef4444',
-    textAlign: 'center',
+    color: "#ef4444",
+    textAlign: "center",
   },
   emptyText: {
     marginTop: 12,
     fontSize: 16,
-    color: '#94a3b8',
+    color: "#94a3b8",
   },
   header: {
     marginBottom: 24,
     paddingTop: 16,
   },
   headerTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 8,
   },
   backButton: {
@@ -284,78 +284,78 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     flex: 1,
   },
   iconContainer: {
-    backgroundColor: '#2563eb',
+    backgroundColor: "#2563eb",
     padding: 8,
     borderRadius: 12,
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1f2937',
+    fontWeight: "bold",
+    color: "#1f2937",
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#6b7280',
+    color: "#6b7280",
     marginLeft: 44,
   },
   card: {
-    backgroundColor: '#ffffff',
+    backgroundColor: "#ffffff",
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 3,
   },
   lastReadingContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
   labelText: {
     fontSize: 14,
-    color: '#6b7280',
+    color: "#6b7280",
     marginBottom: 8,
   },
   priceText: {
     fontSize: 48,
-    fontWeight: 'bold',
-    color: '#1f2937',
+    fontWeight: "bold",
+    color: "#1f2937",
   },
   dateContainer: {
-    alignItems: 'flex-end',
+    alignItems: "flex-end",
   },
   dateLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     marginBottom: 4,
   },
   dateLabelText: {
     fontSize: 12,
-    color: '#6b7280',
+    color: "#6b7280",
   },
   dateText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#1f2937',
+    fontWeight: "600",
+    color: "#1f2937",
   },
   cardTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#1f2937',
+    fontWeight: "600",
+    color: "#1f2937",
     marginBottom: 16,
   },
   gridContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
   },
   gridItem: {
@@ -364,85 +364,85 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   blueBackground: {
-    backgroundColor: '#dbeafe',
+    backgroundColor: "#dbeafe",
   },
   cyanBackground: {
-    backgroundColor: '#cffafe',
+    backgroundColor: "#cffafe",
   },
   gridLabel: {
     fontSize: 12,
-    color: '#6b7280',
+    color: "#6b7280",
     marginBottom: 4,
   },
   gridValue: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#2563eb',
+    fontWeight: "bold",
+    color: "#2563eb",
   },
   gridValueSmall: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#0891b2',
+    fontWeight: "600",
+    color: "#0891b2",
   },
   gridUnit: {
     fontSize: 10,
-    color: '#6b7280',
+    color: "#6b7280",
     marginTop: 4,
   },
   detailCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
   },
   blueGradient: {
-    backgroundColor: '#dbeafe',
+    backgroundColor: "#dbeafe",
   },
   greenGradient: {
-    backgroundColor: '#d1fae5',
+    backgroundColor: "#d1fae5",
   },
   purpleGradient: {
-    backgroundColor: '#f3e8ff',
+    backgroundColor: "#f3e8ff",
   },
   detailContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
   detailIconContainer: {
-    backgroundColor: '#2563eb',
+    backgroundColor: "#2563eb",
     padding: 8,
     borderRadius: 8,
   },
   greenIcon: {
-    backgroundColor: '#059669',
+    backgroundColor: "#059669",
   },
   purpleIcon: {
-    backgroundColor: '#7c3aed',
+    backgroundColor: "#7c3aed",
   },
   detailLabel: {
     fontSize: 12,
-    color: '#6b7280',
+    color: "#6b7280",
     marginBottom: 2,
   },
   detailValue: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1f2937',
+    fontWeight: "bold",
+    color: "#1f2937",
   },
   detailUnit: {
     fontSize: 12,
-    color: '#6b7280',
+    color: "#6b7280",
   },
   footer: {
     marginTop: 8,
     marginBottom: 24,
-    alignItems: 'center',
+    alignItems: "center",
   },
   footerText: {
     fontSize: 14,
-    color: '#6b7280',
+    color: "#6b7280",
   },
 });
