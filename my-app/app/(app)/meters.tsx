@@ -1,17 +1,18 @@
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
-import {
-    ActivityIndicator,
-    FlatList,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-    RefreshControl,
-} from "react-native";
-import { supabase } from "../../lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
+import { observer } from '@legendapp/state/react';
+import { useRouter } from "expo-router";
+import React, { useState } from "react";
+import {
+  FlatList,
+  RefreshControl,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from "react-native";
+import { METERS$ } from '../../utils/SupaLegend';
+
 
 type Meter = {
   id: string;
@@ -24,50 +25,36 @@ type Meter = {
 
 const USER_COMMUNITY_ID = 2;
 
-export default function MetersPage() {
-  const [meters, setMeters] = useState<Meter[]>([]);
-  const [loading, setLoading] = useState(true);
+export default observer(function MetersPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
-
-  const fetchData = async () => {
-    try {
-      setError(null);
-      const { data, error } = await supabase
-        .from("METERS")
-        .select("*")
-        .eq("COMMUNITY_ID", USER_COMMUNITY_ID);
-
-      if (error) throw error;
-      if (!data) throw new Error("No data returned from Supabase");
-
-      const formatted: Meter[] = data.map((r: any) => ({
-        id: String(r.METER_ID),
-        household: r.HOUSEHOLD_NAME ?? `Community ${r.COMMUNITY_ID}`,
-        active: r.ACTIVE ?? false,
-        communityId: r.COMMUNITY_ID,
-        lastReadDate: r.LAST_READ_DATE ?? null,
-        latestReading: r.LATEST_READING ?? null,
-      }));
-
-      setMeters(formatted);
-    } catch (err: any) {
-      setError(err.message);
-      console.error("Error fetching meters:", err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
+  // derive meters reactively from METERS$ observable snapshot
+  const snapshot: any = METERS$.get && METERS$.get();
+  const items = snapshot ? (Array.isArray(snapshot) ? snapshot : Object.values(snapshot)) : [];
+  const filteredItems = items.filter((r: any) => Number(r.COMMUNITY_ID) === USER_COMMUNITY_ID);
+  const metersFromDb: Meter[] = filteredItems.map((r: any) => ({
+    id: String(r.METER_ID),
+    household: r.HOUSEHOLD_NAME ?? `Community ${r.COMMUNITY_ID}`,
+    active: r.ACTIVE ?? false,
+    communityId: r.COMMUNITY_ID,
+    lastReadDate: r.LAST_READ_DATE ?? null,
+    latestReading: r.LATEST_READING ?? null,
+  }));
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchData();
+    // snapshot read will update immediately because this component is an `observer`
+    try {
+      const snap = METERS$.get && METERS$.get();
+      if (snap) {
+        // no-op: reading snapshot is enough to cause a render if data changed
+      }
+    } catch (e) {
+      console.warn('Refresh snapshot failed', e);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const formatDate = (dateStr: string | null): string => {
@@ -79,17 +66,6 @@ export default function MetersPage() {
       year: "numeric",
     });
   };
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#2563eb" />
-          <Text style={styles.loadingText}>Loading meters...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   if (error) {
     return (
@@ -112,11 +88,11 @@ export default function MetersPage() {
           <Text style={styles.headerTitle}>Community Meters</Text>
         </View>
         <Text style={styles.headerSubtitle}>
-          {meters.length} {meters.length === 1 ? "meter" : "meters"} available
+          {metersFromDb.length} {metersFromDb.length === 1 ? "meter" : "meters"} available
         </Text>
       </View>
 
-      {meters.length === 0 ? (
+      {metersFromDb.length === 0 ? (
         <View style={styles.centerContainer}>
           <Ionicons name="water-outline" size={48} color="#94a3b8" />
           <Text style={styles.emptyText}>
@@ -125,7 +101,7 @@ export default function MetersPage() {
         </View>
       ) : (
         <FlatList
-          data={meters}
+          data={metersFromDb}
           keyExtractor={(i) => i.id}
           contentContainerStyle={styles.listContent}
           refreshControl={
@@ -219,7 +195,7 @@ export default function MetersPage() {
       )}
     </SafeAreaView>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
