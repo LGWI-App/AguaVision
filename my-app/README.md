@@ -10,7 +10,21 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npm install
    ```
 
-2. Start the app
+2. Set up Google Cloud Vision API Key
+
+   The app uses Google Cloud Vision API for OCR (Optical Character Recognition) to extract meter readings from images. To enable this feature:
+
+   - Create a `.env` file in the `my-app` directory (if it doesn't exist)
+   - Add your Google Cloud Vision API key:
+     ```
+     EXPO_PUBLIC_GOOGLE_VISION_API_KEY=your_api_key_here
+     ```
+   - Make sure to add `.env` to your `.gitignore` file to keep your API key secure
+   - Restart your Expo development server after adding the environment variable
+
+   **Note:** You can get a Google Cloud Vision API key from the [Google Cloud Console](https://console.cloud.google.com/). Make sure the Cloud Vision API is enabled for your project.
+
+3. Start the app
 
    ```bash
    npx expo start

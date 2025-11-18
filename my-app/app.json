@@ -39,7 +39,20 @@
           }
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app needs access to your photos to select meter reading images.",
+          "cameraPermission": "The app needs access to your camera to capture meter reading images."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "The app needs access to your camera to capture meter reading images with the scanning guide."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
