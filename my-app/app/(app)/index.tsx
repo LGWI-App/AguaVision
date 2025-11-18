@@ -9,11 +9,15 @@ import {
   View,
   ScrollView,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
+import { performOCR, extractMeterReading } from "../../lib/google-vision";
+import { Linking, Platform } from "react-native";
 
 
 
@@ -21,7 +25,195 @@ export default function MeterSubmission() {
   const [meterId, setMeterId] = useState<string>("");
   const [reading, setReading] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [processingOCR, setProcessingOCR] = useState(false);
   const USER_COMMUNITY_ID = 2;
+
+  // Get API key from environment variable
+  const GOOGLE_VISION_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_VISION_API_KEY || "";
+
+  // Request camera permissions
+  async function requestCameraPermission() {
+    // First check current permission status
+    const { status: currentStatus } = await ImagePicker.getCameraPermissionsAsync();
+    
+    if (currentStatus === "granted") {
+      return true;
+    }
+
+    // Request permission
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    
+    if (status === "granted") {
+      return true;
+    }
+
+    // Permission denied - show helpful message
+    if (status === "denied") {
+      Alert.alert(
+        "Camera Permission Required",
+        "To capture meter readings, please enable camera access in your device settings.",
+        [
+          {
+            text: "Cancel",
+            style: "cancel",
+          },
+          {
+            text: "Open Settings",
+            onPress: () => {
+              if (Platform.OS === "ios") {
+                Linking.openURL("app-settings:");
+              } else {
+                Linking.openSettings();
+              }
+            },
+          },
+        ]
+      );
+    } else {
+      // Other status (undetermined, etc.)
+      Alert.alert(
+        "Permission Required",
+        "Camera permission is required to take photos of meter readings. Please grant permission when prompted."
+      );
+    }
+    
+    return false;
+  }
+
+  // Handle image capture/selection
+  async function handleCaptureImage() {
+    // Check gallery permission (usually granted by default, but check anyway)
+    const galleryPermission = await ImagePicker.getMediaLibraryPermissionsAsync();
+    
+    // Show action sheet to choose camera or gallery
+    Alert.alert(
+      "Select Image",
+      "Choose an option",
+      [
+        {
+          text: "Camera",
+          onPress: async () => {
+            // Request camera permission when user chooses camera
+            const hasPermission = await requestCameraPermission();
+            if (!hasPermission) return;
+
+            try {
+              const result = await ImagePicker.launchCameraAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [4, 3],
+                quality: 0.8,
+                base64: false,
+              });
+
+              if (!result.canceled && result.assets[0]) {
+                setCapturedImage(result.assets[0].uri);
+                await processImageWithOCR(result.assets[0].uri);
+              }
+            } catch (error) {
+              console.error("Camera error:", error);
+              Alert.alert("Error", "Failed to capture image.");
+            }
+          },
+        },
+        {
+          text: "Gallery",
+          onPress: async () => {
+            // Request gallery permission if needed
+            if (galleryPermission.status !== "granted") {
+              const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+              if (status !== "granted") {
+                Alert.alert(
+                  "Permission Required",
+                  "Photo library permission is required to select images.",
+                  [
+                    {
+                      text: "Cancel",
+                      style: "cancel",
+                    },
+                    {
+                      text: "Open Settings",
+                      onPress: () => {
+                        if (Platform.OS === "ios") {
+                          Linking.openURL("app-settings:");
+                        } else {
+                          Linking.openSettings();
+                        }
+                      },
+                    },
+                  ]
+                );
+                return;
+              }
+            }
+
+            try {
+              const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                aspect: [4, 3],
+                quality: 0.8,
+                base64: false,
+              });
+
+              if (!result.canceled && result.assets[0]) {
+                setCapturedImage(result.assets[0].uri);
+                await processImageWithOCR(result.assets[0].uri);
+              }
+            } catch (error) {
+              console.error("Gallery error:", error);
+              Alert.alert("Error", "Failed to select image.");
+            }
+          },
+        },
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+      ],
+      { cancelable: true }
+    );
+  }
+
+  // Process image with OCR
+  async function processImageWithOCR(imageUri: string) {
+    if (!GOOGLE_VISION_API_KEY) {
+      Alert.alert(
+        "Configuration Error",
+        "Google Vision API key is not configured. Please set EXPO_PUBLIC_GOOGLE_VISION_API_KEY in your environment variables."
+      );
+      return;
+    }
+
+    setProcessingOCR(true);
+    try {
+      const ocrResult = await performOCR(imageUri, GOOGLE_VISION_API_KEY);
+      const extractedReading = extractMeterReading(ocrResult.text);
+
+      if (extractedReading !== null) {
+        setReading(extractedReading.toString());
+        Alert.alert(
+          "OCR Success",
+          `Detected reading: ${extractedReading}\n\nFull text: ${ocrResult.text.substring(0, 100)}${ocrResult.text.length > 100 ? "..." : ""}`,
+          [{ text: "OK" }]
+        );
+      } else {
+        Alert.alert(
+          "No Reading Detected",
+          `Could not extract a meter reading from the image.\n\nDetected text: ${ocrResult.text.substring(0, 200)}${ocrResult.text.length > 200 ? "..." : ""}\n\nPlease enter the reading manually.`
+        );
+      }
+    } catch (error: any) {
+      console.error("OCR processing error:", error);
+      Alert.alert(
+        "OCR Error",
+        `Failed to process image: ${error.message || "Unknown error"}\n\nPlease enter the reading manually.`
+      );
+    } finally {
+      setProcessingOCR(false);
+    }
+  }
 
   async function handleSubmit() {
     // basic validation
@@ -172,7 +364,36 @@ export default function MeterSubmission() {
                   value={reading}
                   onChangeText={setReading}
                 />
+                <Pressable
+                  onPress={handleCaptureImage}
+                  disabled={processingOCR}
+                  style={({ pressed }) => [
+                    styles.cameraButton,
+                    pressed && styles.cameraButtonPressed,
+                    processingOCR && styles.cameraButtonDisabled,
+                  ]}
+                >
+                  {processingOCR ? (
+                    <ActivityIndicator size="small" color="#2563eb" />
+                  ) : (
+                    <Ionicons name="camera" size={24} color="#2563eb" />
+                  )}
+                </Pressable>
               </View>
+              {capturedImage && (
+                <View style={styles.imagePreview}>
+                  <Image source={{ uri: capturedImage }} style={styles.previewImage} />
+                  <Pressable
+                    onPress={() => setCapturedImage(null)}
+                    style={styles.removeImageButton}
+                  >
+                    <Ionicons name="close-circle" size={24} color="#ef4444" />
+                  </Pressable>
+                </View>
+              )}
+              <Text style={styles.helperText}>
+                Tap the camera icon to capture or select a photo of your meter
+              </Text>
             </View>
 
             {/* Submit Button */}
@@ -348,5 +569,43 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#1e3a8a",
     lineHeight: 20,
+  },
+  cameraButton: {
+    padding: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  cameraButtonPressed: {
+    opacity: 0.7,
+  },
+  cameraButtonDisabled: {
+    opacity: 0.5,
+  },
+  imagePreview: {
+    marginTop: 12,
+    position: "relative",
+    borderRadius: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  previewImage: {
+    width: "100%",
+    height: 200,
+    resizeMode: "cover",
+  },
+  removeImageButton: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    borderRadius: 12,
+    padding: 4,
+  },
+  helperText: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginTop: 8,
+    fontStyle: "italic",
   },
 });
