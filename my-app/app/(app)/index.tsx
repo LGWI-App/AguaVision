@@ -107,8 +107,18 @@ export default function MeterSubmission() {
         const screenWidth = Dimensions.get("window").width;
         const screenHeight = Dimensions.get("window").height;
         
-        // Frame dimensions (as per styles)
-        const frameHeight = 100; // 100px height
+        // Frame dimensions (matching styles: overlayMiddle and scanningFrame both have height: 50)
+        const overlayMiddleHeight = 50; // overlayMiddle height
+        const scanningFrameHeight = 50; // scanningFrame height (same as overlayMiddle)
+        const scanningFrameWidth = screenWidth; // scanningFrame is full width
+        
+        // Calculate the position of scanningFrame on screen
+        // Overlay structure: overlayTop (flex: 1) -> overlayMiddle (height: 50) -> overlayBottom (flex: 1)
+        // Since overlayTop and overlayBottom both have flex: 1, they split remaining space equally
+        const remainingHeight = screenHeight - overlayMiddleHeight;
+        const overlayTopHeight = remainingHeight / 2;
+        // scanningFrame Y position on screen (from top of screen)
+        const scanningFrameY = overlayTopHeight;
         
         // Get image dimensions using Image.getSize
         const getImageSize = (): Promise<{ width: number; height: number }> => {
@@ -123,27 +133,27 @@ export default function MeterSubmission() {
         
         const { width: imageWidth, height: imageHeight } = await getImageSize();
         
-        // Calculate the crop region
-        // The frame is full width (screenWidth) and 100px height, centered vertically
-        // Map screen coordinates to image coordinates
-        // Since frame is full width, we crop full width of the image
-        const cropWidth = imageWidth;
-        // Calculate height based on frame height ratio to screen height
-        const cropHeight = (frameHeight / screenHeight) * imageHeight;
-        // Calculate Y position (center of image minus half crop height)
-        const cropY = (imageHeight - cropHeight) / 2;
-        const cropX = 0;
+        // Calculate the crop region by mapping screen coordinates to image coordinates
+        // Calculate scale factors
+        const scaleX = imageWidth / screenWidth;
+        const scaleY = imageHeight / screenHeight;
         
-        // Crop the image to the frame area
+        // Map scanningFrame dimensions and position to image coordinates
+        const cropWidth = scanningFrameWidth * scaleX; // Full width of image
+        const cropHeight = scanningFrameHeight * scaleY; // 50px mapped to image height
+        const cropX = 0; // Frame starts at left edge
+        const cropY = scanningFrameY * scaleY; // Map screen Y position to image Y position
+        
+        // Crop the image to match exactly what's visible in the scanningFrame
         const croppedImage = await ImageManipulator.manipulateAsync(
           photo.uri,
           [
             {
               crop: {
-                originX: cropX,
-                originY: cropY,
-                width: cropWidth,
-                height: cropHeight,
+                originX: Math.round(cropX),
+                originY: Math.round(cropY),
+                width: Math.round(cropWidth),
+                height: Math.round(cropHeight),
               },
             },
           ],
@@ -744,7 +754,7 @@ const styles = StyleSheet.create({
   },
   overlayMiddle: {
     flexDirection: "row",
-    height: 100,
+    height: 50,
   },
   overlaySide: {
     flex: 1,
@@ -752,7 +762,7 @@ const styles = StyleSheet.create({
   },
   scanningFrame: {
     width: Dimensions.get("window").width,
-    height: 100,
+    height: 50,
     position: "relative",
     justifyContent: "center",
     alignItems: "center",
