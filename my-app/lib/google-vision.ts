@@ -1,11 +1,12 @@
 /**
  * Google Cloud Vision API OCR Service
- * 
+ *
  * This service handles OCR requests to Google Cloud Vision API
  * to extract text from meter reading images.
  */
 
-const GOOGLE_VISION_API_URL = 'https://vision.googleapis.com/v1/images:annotate';
+const GOOGLE_VISION_API_URL =
+  "https://vision.googleapis.com/v1/images:annotate";
 
 export interface OCRResult {
   text: string;
@@ -46,7 +47,7 @@ export interface GoogleVisionResponse {
  */
 async function imageToBase64(uri: string): Promise<string> {
   // If it's already a data URI, extract the base64 part
-  if (uri.startsWith('data:image')) {
+  if (uri.startsWith("data:image")) {
     const base64Match = uri.match(/^data:image\/\w+;base64,(.+)$/);
     if (base64Match) {
       return base64Match[1];
@@ -57,7 +58,9 @@ async function imageToBase64(uri: string): Promise<string> {
   try {
     // Try using expo-file-system if available
     try {
-      const { readAsStringAsync, EncodingType } = await import('expo-file-system');
+      const { readAsStringAsync, EncodingType } = await import(
+        "expo-file-system"
+      );
       const base64 = await readAsStringAsync(uri, {
         encoding: EncodingType.Base64,
       });
@@ -66,14 +69,14 @@ async function imageToBase64(uri: string): Promise<string> {
       // Fallback to fetch for web or if file-system is not available
       const response = await fetch(uri);
       const blob = await response.blob();
-      
+
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onloadend = () => {
           const base64 = reader.result as string;
           // Remove data URI prefix if present
-          const base64Data = base64.includes(',') 
-            ? base64.split(',')[1] 
+          const base64Data = base64.includes(",")
+            ? base64.split(",")[1]
             : base64;
           resolve(base64Data);
         };
@@ -94,7 +97,7 @@ async function imageToBase64(uri: string): Promise<string> {
  */
 export async function performOCR(
   imageUri: string,
-  apiKey: string
+  apiKey: string,
 ): Promise<OCRResult> {
   try {
     // Convert image to base64
@@ -109,7 +112,7 @@ export async function performOCR(
           },
           features: [
             {
-              type: 'TEXT_DETECTION',
+              type: "TEXT_DETECTION",
               maxResults: 1,
             },
           ],
@@ -118,21 +121,18 @@ export async function performOCR(
     };
 
     // Make API request
-    const response = await fetch(
-      `${GOOGLE_VISION_API_URL}?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      }
-    );
+    const response = await fetch(`${GOOGLE_VISION_API_URL}?key=${apiKey}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
       throw new Error(
-        `Google Vision API error: ${response.status} - ${errorText}`
+        `Google Vision API error: ${response.status} - ${errorText}`,
       );
     }
 
@@ -141,7 +141,7 @@ export async function performOCR(
     // Check for API errors
     if (data.responses?.[0]?.error) {
       throw new Error(
-        `Google Vision API error: ${data.responses[0].error.message}`
+        `Google Vision API error: ${data.responses[0].error.message}`,
       );
     }
 
@@ -151,20 +151,20 @@ export async function performOCR(
 
     if (!textAnnotations || textAnnotations.length === 0) {
       return {
-        text: '',
-        fullTextAnnotation: fullTextAnnotation?.text || '',
+        text: "",
+        fullTextAnnotation: fullTextAnnotation?.text || "",
       };
     }
 
     // The first annotation contains the entire detected text
-    const detectedText = textAnnotations[0].description || '';
+    const detectedText = textAnnotations[0].description || "";
 
     return {
       text: detectedText,
       fullTextAnnotation: fullTextAnnotation?.text || detectedText,
     };
   } catch (error) {
-    console.error('OCR Error:', error);
+    console.error("OCR Error:", error);
     throw error;
   }
 }
@@ -179,7 +179,7 @@ export function extractNumbers(ocrText: string): number[] {
   // Match numbers (including decimals) in the text
   const numberRegex = /\d+\.?\d*/g;
   const matches = ocrText.match(numberRegex);
-  
+
   if (!matches) {
     return [];
   }
@@ -195,7 +195,7 @@ export function extractNumbers(ocrText: string): number[] {
  */
 export function extractMeterReading(ocrText: string): number | null {
   const numbers = extractNumbers(ocrText);
-  
+
   if (numbers.length === 0) {
     return null;
   }
@@ -203,4 +203,3 @@ export function extractMeterReading(ocrText: string): number | null {
   // Return the largest number (likely the meter reading)
   return Math.max(...numbers);
 }
-
