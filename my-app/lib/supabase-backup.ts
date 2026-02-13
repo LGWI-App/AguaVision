@@ -1,16 +1,15 @@
 import { supabase, isSupabaseConfigured } from "./supabase";
-import {
-  getAllCommunities,
-  getAllMeters,
-  getAllMeterReadings,
-} from "./db";
+import { getAllCommunities, getAllMeters, getAllMeterReadings } from "./db";
 
 /**
  * Push all local SQLite data to Supabase for backup.
  * Only runs when Supabase is configured and requests succeed (assumes online).
  * Never reads from Supabase; app always uses SQLite.
  */
-export async function syncLocalToSupabase(): Promise<{ ok: boolean; error?: string }> {
+export async function syncLocalToSupabase(): Promise<{
+  ok: boolean;
+  error?: string;
+}> {
   if (!isSupabaseConfigured() || !supabase) {
     return { ok: false, error: "Supabase not configured" };
   }

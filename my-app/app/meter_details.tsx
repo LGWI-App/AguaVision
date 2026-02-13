@@ -51,9 +51,10 @@ export default function App() {
         LAST_READING: r.LAST_READING,
         entry_id: r.id,
       }));
-      const filtered = meterId != null && !Number.isNaN(meterId)
-        ? readings.filter((r) => r.METER_ID === meterId)
-        : readings;
+      const filtered =
+        meterId != null && !Number.isNaN(meterId)
+          ? readings.filter((r) => r.METER_ID === meterId)
+          : readings;
       setData(filtered);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
@@ -98,13 +99,16 @@ export default function App() {
               await deleteMeter(meterId);
               router.back();
             } catch (err) {
-              Alert.alert("Error", err instanceof Error ? err.message : "Failed to delete meter.");
+              Alert.alert(
+                "Error",
+                err instanceof Error ? err.message : "Failed to delete meter.",
+              );
             } finally {
               setDeleting(false);
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -134,7 +138,10 @@ export default function App() {
           <Text style={styles.emptyText}>No readings found</Text>
           {meterId != null && !Number.isNaN(meterId) && (
             <TouchableOpacity
-              style={[styles.deleteButton, deleting && styles.deleteButtonDisabled]}
+              style={[
+                styles.deleteButton,
+                deleting && styles.deleteButtonDisabled,
+              ]}
               onPress={handleDeleteMeter}
               disabled={deleting}
               accessibilityRole="button"
@@ -287,7 +294,10 @@ export default function App() {
 
         {meterId != null && !Number.isNaN(meterId) && (
           <TouchableOpacity
-            style={[styles.deleteButton, deleting && styles.deleteButtonDisabled]}
+            style={[
+              styles.deleteButton,
+              deleting && styles.deleteButtonDisabled,
+            ]}
             onPress={handleDeleteMeter}
             disabled={deleting}
             accessibilityRole="button"

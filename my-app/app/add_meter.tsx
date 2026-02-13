@@ -1,5 +1,5 @@
 import { useRouter } from "expo-router";
-import { useState } from "react"; 
+import { useState } from "react";
 import {
   Alert,
   Keyboard,
@@ -30,21 +30,34 @@ export default function AddMeterScreen() {
   async function handleSubmit() {
     const id = parseInt(meterId.trim(), 10);
     if (!meterId.trim() || Number.isNaN(id) || id <= 0) {
-      Alert.alert("Invalid input", "Please enter a valid Meter ID (positive number).");
+      Alert.alert(
+        "Invalid input",
+        "Please enter a valid Meter ID (positive number).",
+      );
       return;
     }
 
     const readingTrim = initialReading.trim();
     const hasInitialReading = readingTrim !== "";
     const initialReadingNum = hasInitialReading ? parseFloat(readingTrim) : NaN;
-    if (hasInitialReading && (Number.isNaN(initialReadingNum) || initialReadingNum < 0)) {
-      Alert.alert("Invalid input", "Initial reading must be a non‑negative number.");
+    if (
+      hasInitialReading &&
+      (Number.isNaN(initialReadingNum) || initialReadingNum < 0)
+    ) {
+      Alert.alert(
+        "Invalid input",
+        "Initial reading must be a non‑negative number.",
+      );
       return;
     }
 
     setSubmitting(true);
     try {
-      await ensureMeterExists(id, USER_COMMUNITY_ID, householdName.trim() || undefined);
+      await ensureMeterExists(
+        id,
+        USER_COMMUNITY_ID,
+        householdName.trim() || undefined,
+      );
 
       if (hasInitialReading) {
         const now = new Date().toISOString();
@@ -60,12 +73,17 @@ export default function AddMeterScreen() {
         });
       }
 
-      import("@/lib/supabase-backup").then(({ syncLocalToSupabase }) => syncLocalToSupabase());
-      Alert.alert("Meter added", "The meter has been added to your community.", [
-        { text: "OK", onPress: () => router.back() },
-      ]);
+      import("@/lib/supabase-backup").then(({ syncLocalToSupabase }) =>
+        syncLocalToSupabase(),
+      );
+      Alert.alert(
+        "Meter added",
+        "The meter has been added to your community.",
+        [{ text: "OK", onPress: () => router.back() }],
+      );
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to add meter.";
+      const message =
+        err instanceof Error ? err.message : "Failed to add meter.";
       Alert.alert("Error", message);
       console.error("Add meter error:", err);
     } finally {
@@ -120,7 +138,10 @@ export default function AddMeterScreen() {
             />
 
             <TouchableOpacity
-              style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
+              style={[
+                styles.submitButton,
+                submitting && styles.submitButtonDisabled,
+              ]}
               onPress={handleSubmit}
               disabled={submitting}
               accessibilityRole="button"
