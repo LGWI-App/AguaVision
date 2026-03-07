@@ -2,7 +2,6 @@ import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     FlatList,
     SafeAreaView,
     StyleSheet,
@@ -11,7 +10,7 @@ import {
     View,
     RefreshControl,
 } from "react-native";
-import { getMetersByCommunity, clearAllData } from "../../lib/db";
+import { supabase } from "../../lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
 
 type Meter = {
@@ -23,7 +22,7 @@ type Meter = {
   latestReading: number | null;
 };
 
-const USER_COMMUNITY_ID = 67;
+const USER_COMMUNITY_ID = 2;
 
 export default function MetersPage() {
   const [meters, setMeters] = useState<Meter[]>([]);
@@ -35,12 +34,18 @@ export default function MetersPage() {
   const fetchData = async () => {
     try {
       setError(null);
-      const data = await getMetersByCommunity(USER_COMMUNITY_ID);
+      const { data, error } = await supabase
+        .from("METERS")
+        .select("*")
+        .eq("COMMUNITY_ID", USER_COMMUNITY_ID);
 
-      const formatted: Meter[] = data.map((r) => ({
+      if (error) throw error;
+      if (!data) throw new Error("No data returned from Supabase");
+
+      const formatted: Meter[] = data.map((r: any) => ({
         id: String(r.METER_ID),
         household: r.HOUSEHOLD_NAME ?? `Community ${r.COMMUNITY_ID}`,
-        active: Boolean(r.ACTIVE),
+        active: r.ACTIVE ?? false,
         communityId: r.COMMUNITY_ID,
         lastReadDate: r.LAST_READ_DATE ?? null,
         latestReading: r.LATEST_READING ?? null,
@@ -73,29 +78,6 @@ export default function MetersPage() {
       day: "numeric",
       year: "numeric",
     });
-  };
-
-  const handleClearDatabase = () => {
-    Alert.alert(
-      "Clear database",
-      "Delete all meters and readings? This cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clear all",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await clearAllData();
-              fetchData();
-              Alert.alert("Done", "Database cleared.");
-            } catch (e) {
-              Alert.alert("Error", e instanceof Error ? e.message : "Failed to clear.");
-            }
-          },
-        },
-      ]
-    );
   };
 
   if (loading) {
@@ -145,7 +127,7 @@ export default function MetersPage() {
         <FlatList
           data={meters}
           keyExtractor={(i) => i.id}
-          contentContainerStyle={[styles.listContent, { paddingBottom: 80 }]}
+          contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
@@ -235,15 +217,6 @@ export default function MetersPage() {
           }}
         />
       )}
-
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => router.push("/add_meter")}
-        accessibilityRole="button"
-        accessibilityLabel="Add new meter"
-      >
-        <Ionicons name="add" size={28} color="#ffffff" />
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -401,21 +374,5 @@ const styles = StyleSheet.create({
   cardFooter: {
     alignItems: "flex-end",
     marginTop: 4,
-  },
-  fab: {
-    position: "absolute",
-    right: 20,
-    bottom: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#2563eb",
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
   },
 });
