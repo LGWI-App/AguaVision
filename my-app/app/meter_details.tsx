@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+// App.tsx
+import React, { useState, useEffect } from "react";
+import { supabase } from "../lib/supabase";
 import {
-  Alert,
   StyleSheet,
   Text,
   View,
@@ -11,8 +12,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useLocalSearchParams } from "expo-router";
-import { getAllMeterReadingsOrderedByDate, deleteMeter } from "../lib/db";
+import { useRouter } from "expo-router";
 
 interface MeterReading {
   idx: number;
@@ -27,35 +27,23 @@ interface MeterReading {
 }
 
 export default function App() {
-  const router = useRouter();
-  const { id: meterIdParam } = useLocalSearchParams<{ id?: string }>();
-  const meterId = meterIdParam ? parseInt(meterIdParam, 10) : null;
   const [data, setData] = useState<MeterReading[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const router = useRouter();
 
   const fetchData = async () => {
     try {
       setError(null);
-      const rows = await getAllMeterReadingsOrderedByDate();
-      const readings = rows.map((r) => ({
-        idx: r.id,
-        METER_ID: r.METER_ID,
-        CURRENT_READING: r.CURRENT_READING,
-        WATER_USED: r.WATER_USED,
-        PRICE: r.PRICE,
-        DATE_LAST_READ: r.DATE_LAST_READ ?? "",
-        DATE_CURRENT: r.DATE_CURRENT,
-        LAST_READING: r.LAST_READING,
-        entry_id: r.id,
-      }));
-      const filtered =
-        meterId != null && !Number.isNaN(meterId)
-          ? readings.filter((r) => r.METER_ID === meterId)
-          : readings;
-      setData(filtered);
+      const { data: readings, error: supabaseError } = await supabase
+        .from("METER_READINGS")
+        .select("*")
+        .order("DATE_CURRENT", { ascending: true });
+
+      if (supabaseError) throw supabaseError;
+
+      setData(readings || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
       console.error("Error fetching data:", err);
@@ -83,35 +71,6 @@ export default function App() {
     });
   };
 
-  const handleDeleteMeter = () => {
-    if (meterId == null || Number.isNaN(meterId)) return;
-    Alert.alert(
-      "Delete meter",
-      "This will permanently delete this meter and all its readings. This cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            setDeleting(true);
-            try {
-              await deleteMeter(meterId);
-              router.back();
-            } catch (err) {
-              Alert.alert(
-                "Error",
-                err instanceof Error ? err.message : "Failed to delete meter.",
-              );
-            } finally {
-              setDeleting(false);
-            }
-          },
-        },
-      ],
-    );
-  };
-
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -132,29 +91,10 @@ export default function App() {
 
   if (data.length === 0) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.centerContainer}>
-          <Ionicons name="water-outline" size={48} color="#94a3b8" />
-          <Text style={styles.emptyText}>No readings found</Text>
-          {meterId != null && !Number.isNaN(meterId) && (
-            <TouchableOpacity
-              style={[
-                styles.deleteButton,
-                deleting && styles.deleteButtonDisabled,
-              ]}
-              onPress={handleDeleteMeter}
-              disabled={deleting}
-              accessibilityRole="button"
-              accessibilityLabel="Delete this meter"
-            >
-              <Ionicons name="trash-outline" size={20} color="#ffffff" />
-              <Text style={styles.deleteButtonText}>
-                {deleting ? "Deleting…" : "Delete meter"}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </SafeAreaView>
+      <View style={styles.centerContainer}>
+        <Ionicons name="water-outline" size={48} color="#94a3b8" />
+        <Text style={styles.emptyText}>No readings found</Text>
+      </View>
     );
   }
 
@@ -291,24 +231,6 @@ export default function App() {
             {data.length} readings on record
           </Text>
         </View>
-
-        {meterId != null && !Number.isNaN(meterId) && (
-          <TouchableOpacity
-            style={[
-              styles.deleteButton,
-              deleting && styles.deleteButtonDisabled,
-            ]}
-            onPress={handleDeleteMeter}
-            disabled={deleting}
-            accessibilityRole="button"
-            accessibilityLabel="Delete this meter"
-          >
-            <Ionicons name="trash-outline" size={20} color="#ffffff" />
-            <Text style={styles.deleteButtonText}>
-              {deleting ? "Deleting…" : "Delete meter"}
-            </Text>
-          </TouchableOpacity>
-        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -516,30 +438,11 @@ const styles = StyleSheet.create({
   },
   footer: {
     marginTop: 8,
-    marginBottom: 16,
+    marginBottom: 24,
     alignItems: "center",
   },
   footerText: {
     fontSize: 14,
     color: "#6b7280",
-  },
-  deleteButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#dc2626",
-    padding: 16,
-    borderRadius: 12,
-    marginTop: 24,
-    marginBottom: 32,
-  },
-  deleteButtonDisabled: {
-    opacity: 0.6,
-  },
-  deleteButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#ffffff",
   },
 });
