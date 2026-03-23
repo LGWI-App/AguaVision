@@ -42,6 +42,9 @@ function RootNavigator() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Protected guard={!!session}>
         <Stack.Screen name="(app)" />
+        {/* Sibling routes must be listed or push from tabs may not navigate */}
+        <Stack.Screen name="add_meter" />
+        <Stack.Screen name="meter_details" />
       </Stack.Protected>
 
       <Stack.Protected guard={!session}>

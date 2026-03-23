@@ -20,7 +20,7 @@ import {
   getCommunityPriceRate,
   insertMeterReading,
   updateMeterLatestReading,
-  meterExists,
+  meterExistsInCommunity,
   DEFAULT_COMMUNITY_ID,
 } from "../../lib/db";
 import { useRouter } from "expo-router";
@@ -304,16 +304,17 @@ export default function MeterSubmission() {
 
     setSubmitting(true);
     try {
-      const exists = await meterExists(id);
+      const exists = await meterExistsInCommunity(id, DEFAULT_COMMUNITY_ID);
       if (!exists) {
-        router.push({
-          pathname: "/add_meter",
-          params: { meterId: String(id), reading: String(current) },
-        });
+        const q = new URLSearchParams({
+          meterId: String(id),
+          reading: String(current),
+        }).toString();
+        router.push(`/add_meter?${q}` as const);
         return;
       }
 
-      const lastRow = await getLastReadingForMeter(id);
+      const lastRow = await getLastReadingForMeter(id, DEFAULT_COMMUNITY_ID);
       const lastReading = lastRow ? Number(lastRow.CURRENT_READING) : 0;
       const waterUsed = current - lastReading;
 

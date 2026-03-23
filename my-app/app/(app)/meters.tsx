@@ -1,8 +1,8 @@
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import React, { useCallback, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     FlatList,
     SafeAreaView,
     StyleSheet,
@@ -11,7 +11,7 @@ import {
     View,
     RefreshControl,
 } from "react-native";
-import { getMetersByCommunity, clearAllData, DEFAULT_COMMUNITY_ID } from "../../lib/db";
+import { getMetersByCommunity, DEFAULT_COMMUNITY_ID } from "../../lib/db";
 import { Ionicons } from "@expo/vector-icons";
 
 type Meter = {
@@ -30,7 +30,7 @@ export default function MetersPage() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setError(null);
       const data = await getMetersByCommunity(DEFAULT_COMMUNITY_ID);
@@ -52,11 +52,14 @@ export default function MetersPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    fetchData();
   }, []);
+
+  // Refetch whenever this tab gains focus (e.g. after router.back() from Add meter).
+  useFocusEffect(
+    useCallback(() => {
+      void fetchData();
+    }, [fetchData])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -71,29 +74,6 @@ export default function MetersPage() {
       day: "numeric",
       year: "numeric",
     });
-  };
-
-  const handleClearDatabase = () => {
-    Alert.alert(
-      "Clear database",
-      "Delete all meters and readings? This cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clear all",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await clearAllData();
-              fetchData();
-              Alert.alert("Done", "Database cleared.");
-            } catch (e) {
-              Alert.alert("Error", e instanceof Error ? e.message : "Failed to clear.");
-            }
-          },
-        },
-      ]
-    );
   };
 
   if (loading) {

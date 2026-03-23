@@ -26,6 +26,7 @@ async function getDb(): Promise<SQLite.SQLiteDatabase> {
 async function initSchema(database: SQLite.SQLiteDatabase) {
   await database.execAsync(`
     PRAGMA journal_mode = WAL;
+    PRAGMA foreign_keys = ON;
     CREATE TABLE IF NOT EXISTS COMMUNITY (
       COMMUNITY_ID INTEGER PRIMARY KEY,
       PRICE_RATE REAL NOT NULL DEFAULT 0
@@ -83,16 +84,18 @@ export async function clearAllData(): Promise<void> {
   `);
 }
 
+/** Latest reading for this meter within a community (aligns with submit + Meters tab). */
 export async function getLastReadingForMeter(
   meterId: number,
+  communityId: number,
 ): Promise<{ CURRENT_READING: number; DATE_CURRENT: string } | null> {
   const database = await getDb();
   const row = await database.getFirstAsync<{
     CURRENT_READING: number;
     DATE_CURRENT: string;
   }>(
-    "SELECT CURRENT_READING, DATE_CURRENT FROM METER_READINGS WHERE METER_ID = ? ORDER BY DATE_CURRENT DESC LIMIT 1",
-    [meterId],
+    "SELECT CURRENT_READING, DATE_CURRENT FROM METER_READINGS WHERE METER_ID = ? AND COMMUNITY_ID = ? ORDER BY DATE_CURRENT DESC LIMIT 1",
+    [meterId, communityId],
   );
   return row ?? null;
 }
@@ -163,16 +166,27 @@ export async function ensureCommunityExists(
   );
 }
 
-/** True if this meter is registered in METERS (not just orphaned readings). */
-export async function meterExists(meterId: number): Promise<boolean> {
+/**
+ * True if this meter is registered in **METERS** for the given community.
+ * Matches what the Meters tab shows (`getMetersByCommunity`), not orphan rows in METER_READINGS.
+ */
+export async function meterExistsInCommunity(
+  meterId: number,
+  communityId: number
+): Promise<boolean> {
   const database = await getDb();
   const row = await database.getFirstAsync<{ one: number }>(
-    "SELECT 1 AS one FROM METERS WHERE METER_ID = ? LIMIT 1",
-    [meterId]
+    "SELECT 1 AS one FROM METERS WHERE METER_ID = ? AND COMMUNITY_ID = ? LIMIT 1",
+    [meterId, communityId]
   );
   return row != null;
 }
 
+/**
+ * Insert or update the meter for this community.
+ * Uses UPSERT so a duplicate METER_ID (e.g. old row in another community) is updated
+ * instead of ignored — `INSERT OR IGNORE` would leave the row invisible on the Meters tab.
+ */
 export async function ensureMeterExists(
   meterId: number,
   communityId: number,
@@ -180,9 +194,15 @@ export async function ensureMeterExists(
 ): Promise<void> {
   const database = await getDb();
   await ensureCommunityExists(communityId);
+  const name = householdName ?? `Meter ${meterId}`;
   await database.runAsync(
-    "INSERT OR IGNORE INTO METERS (METER_ID, COMMUNITY_ID, HOUSEHOLD_NAME, ACTIVE) VALUES (?, ?, ?, 1)",
-    [meterId, communityId, householdName ?? `Meter ${meterId}`],
+    `INSERT INTO METERS (METER_ID, COMMUNITY_ID, HOUSEHOLD_NAME, ACTIVE)
+     VALUES (?, ?, ?, 1)
+     ON CONFLICT(METER_ID) DO UPDATE SET
+       COMMUNITY_ID = excluded.COMMUNITY_ID,
+       HOUSEHOLD_NAME = excluded.HOUSEHOLD_NAME,
+       ACTIVE = excluded.ACTIVE`,
+    [meterId, communityId, name],
   );
 }
 
