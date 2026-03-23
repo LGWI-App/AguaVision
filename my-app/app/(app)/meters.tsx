@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import React, { useCallback, useState } from "react";
 import {
     ActivityIndicator,
     FlatList,
@@ -10,7 +11,7 @@ import {
     View,
     RefreshControl,
 } from "react-native";
-import { supabase } from "../../lib/supabase";
+import { getMetersByCommunity, DEFAULT_COMMUNITY_ID } from "../../lib/db";
 import { Ionicons } from "@expo/vector-icons";
 
 type Meter = {
@@ -22,8 +23,6 @@ type Meter = {
   latestReading: number | null;
 };
 
-const USER_COMMUNITY_ID = 2;
-
 export default function MetersPage() {
   const [meters, setMeters] = useState<Meter[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,21 +30,15 @@ export default function MetersPage() {
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setError(null);
-      const { data, error } = await supabase
-        .from("METERS")
-        .select("*")
-        .eq("COMMUNITY_ID", USER_COMMUNITY_ID);
+      const data = await getMetersByCommunity(DEFAULT_COMMUNITY_ID);
 
-      if (error) throw error;
-      if (!data) throw new Error("No data returned from Supabase");
-
-      const formatted: Meter[] = data.map((r: any) => ({
+      const formatted: Meter[] = data.map((r) => ({
         id: String(r.METER_ID),
         household: r.HOUSEHOLD_NAME ?? `Community ${r.COMMUNITY_ID}`,
-        active: r.ACTIVE ?? false,
+        active: Boolean(r.ACTIVE),
         communityId: r.COMMUNITY_ID,
         lastReadDate: r.LAST_READ_DATE ?? null,
         latestReading: r.LATEST_READING ?? null,
@@ -59,11 +52,14 @@ export default function MetersPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    fetchData();
   }, []);
+
+  // Refetch whenever this tab gains focus (e.g. after router.back() from Add meter).
+  useFocusEffect(
+    useCallback(() => {
+      void fetchData();
+    }, [fetchData])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
