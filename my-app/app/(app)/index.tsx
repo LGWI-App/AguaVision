@@ -20,8 +20,10 @@ import {
   getCommunityPriceRate,
   insertMeterReading,
   updateMeterLatestReading,
-  ensureMeterExists,
+  meterExists,
+  DEFAULT_COMMUNITY_ID,
 } from "../../lib/db";
+import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -32,6 +34,7 @@ import { Linking, Platform } from "react-native";
 
 
 export default function MeterSubmission() {
+  const router = useRouter();
   const [meterId, setMeterId] = useState<string>("");
   const [reading, setReading] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
@@ -40,7 +43,6 @@ export default function MeterSubmission() {
   const [showCamera, setShowCamera] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
-  const USER_COMMUNITY_ID = 2;
 
   // Get API key from environment variable
   const GOOGLE_VISION_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_VISION_API_KEY || "";
@@ -302,15 +304,25 @@ export default function MeterSubmission() {
 
     setSubmitting(true);
     try {
+      const exists = await meterExists(id);
+      if (!exists) {
+        router.push({
+          pathname: "/add_meter",
+          params: { meterId: String(id), reading: String(current) },
+        });
+        return;
+      }
+
       const lastRow = await getLastReadingForMeter(id);
       const lastReading = lastRow ? Number(lastRow.CURRENT_READING) : 0;
       const waterUsed = current - lastReading;
 
-      const priceRate = await getCommunityPriceRate(USER_COMMUNITY_ID);
+      const priceRate = await getCommunityPriceRate(DEFAULT_COMMUNITY_ID);
       const computedPrice = Math.max(0, waterUsed) * priceRate;
 
       const payload = {
         METER_ID: id,
+        COMMUNITY_ID: DEFAULT_COMMUNITY_ID,
         CURRENT_READING: current,
         WATER_USED: waterUsed >= 0 ? waterUsed : 0,
         PRICE: computedPrice,
@@ -319,7 +331,6 @@ export default function MeterSubmission() {
         LAST_READING: lastReading,
       };
 
-      await ensureMeterExists(id, USER_COMMUNITY_ID);
       await insertMeterReading(payload);
       await updateMeterLatestReading(id, current, new Date().toISOString());
 

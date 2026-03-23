@@ -17,6 +17,7 @@ import { getAllMeterReadingsOrderedByDate, deleteMeter } from "../lib/db";
 interface MeterReading {
   idx: number;
   METER_ID: number;
+  COMMUNITY_ID: number;
   CURRENT_READING: number;
   WATER_USED: number;
   PRICE: number;
@@ -43,6 +44,7 @@ export default function App() {
       const readings = rows.map((r) => ({
         idx: r.id,
         METER_ID: r.METER_ID,
+        COMMUNITY_ID: r.COMMUNITY_ID,
         CURRENT_READING: r.CURRENT_READING,
         WATER_USED: r.WATER_USED,
         PRICE: r.PRICE,

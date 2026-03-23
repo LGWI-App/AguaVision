@@ -11,7 +11,7 @@ import {
     View,
     RefreshControl,
 } from "react-native";
-import { getMetersByCommunity, clearAllData } from "../../lib/db";
+import { getMetersByCommunity, clearAllData, DEFAULT_COMMUNITY_ID } from "../../lib/db";
 import { Ionicons } from "@expo/vector-icons";
 
 type Meter = {
@@ -23,8 +23,6 @@ type Meter = {
   latestReading: number | null;
 };
 
-const USER_COMMUNITY_ID = 67;
-
 export default function MetersPage() {
   const [meters, setMeters] = useState<Meter[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +33,7 @@ export default function MetersPage() {
   const fetchData = async () => {
     try {
       setError(null);
-      const data = await getMetersByCommunity(USER_COMMUNITY_ID);
+      const data = await getMetersByCommunity(DEFAULT_COMMUNITY_ID);
 
       const formatted: Meter[] = data.map((r) => ({
         id: String(r.METER_ID),

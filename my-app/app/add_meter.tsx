@@ -1,5 +1,5 @@
-import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useRouter, useLocalSearchParams } from "expo-router";
+import { useState, useEffect } from "react";
 import {
   Alert,
   Keyboard,
@@ -16,16 +16,28 @@ import {
   ensureMeterExists,
   updateMeterLatestReading,
   insertMeterReading,
+  DEFAULT_COMMUNITY_ID,
 } from "@/lib/db";
-
-const USER_COMMUNITY_ID = 67;
 
 export default function AddMeterScreen() {
   const router = useRouter();
+  const { meterId: paramMeterId, reading: paramReading } = useLocalSearchParams<{
+    meterId?: string;
+    reading?: string;
+  }>();
   const [meterId, setMeterId] = useState("");
   const [householdName, setHouseholdName] = useState("");
   const [initialReading, setInitialReading] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (paramMeterId != null && String(paramMeterId).trim() !== "") {
+      setMeterId(String(paramMeterId).trim());
+    }
+    if (paramReading != null && String(paramReading).trim() !== "") {
+      setInitialReading(String(paramReading).trim());
+    }
+  }, [paramMeterId, paramReading]);
 
   async function handleSubmit() {
     const id = parseInt(meterId.trim(), 10);
@@ -55,7 +67,7 @@ export default function AddMeterScreen() {
     try {
       await ensureMeterExists(
         id,
-        USER_COMMUNITY_ID,
+        DEFAULT_COMMUNITY_ID,
         householdName.trim() || undefined,
       );
 
@@ -64,6 +76,7 @@ export default function AddMeterScreen() {
         await updateMeterLatestReading(id, initialReadingNum, now);
         await insertMeterReading({
           METER_ID: id,
+          COMMUNITY_ID: DEFAULT_COMMUNITY_ID,
           CURRENT_READING: initialReadingNum,
           WATER_USED: 0,
           PRICE: 0,
@@ -73,9 +86,17 @@ export default function AddMeterScreen() {
         });
       }
 
-      import("@/lib/supabase-backup").then(({ syncLocalToSupabase }) =>
-        syncLocalToSupabase(),
-      );
+      import("@/lib/supabase-backup")
+        .then(async ({ syncLocalToSupabase }) => {
+          const result = await syncLocalToSupabase();
+          console.log("[Supabase backup] syncLocalToSupabase result:", result);
+        })
+        .catch((err) => {
+          console.error(
+            "[Supabase backup] Failed to run syncLocalToSupabase:",
+            err,
+          );
+        });
       Alert.alert(
         "Meter added",
         "The meter has been added to your community.",

@@ -1,5 +1,8 @@
 import * as SQLite from "expo-sqlite";
 
+/** Default community for new meters and meter readings (change one place to retarget the app). */
+export const DEFAULT_COMMUNITY_ID = 2;
+
 const DB_NAME = "aguavision.db";
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -39,18 +42,34 @@ async function initSchema(database: SQLite.SQLiteDatabase) {
     CREATE TABLE IF NOT EXISTS METER_READINGS (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       METER_ID INTEGER NOT NULL,
+      COMMUNITY_ID INTEGER NOT NULL DEFAULT ${DEFAULT_COMMUNITY_ID},
       CURRENT_READING REAL NOT NULL,
       WATER_USED REAL NOT NULL DEFAULT 0,
       PRICE REAL NOT NULL DEFAULT 0,
       DATE_LAST_READ TEXT,
       DATE_CURRENT TEXT NOT NULL,
       LAST_READING REAL NOT NULL DEFAULT 0,
-      FOREIGN KEY (METER_ID) REFERENCES METERS(METER_ID)
+      FOREIGN KEY (METER_ID) REFERENCES METERS(METER_ID),
+      FOREIGN KEY (COMMUNITY_ID) REFERENCES COMMUNITY(COMMUNITY_ID)
     );
   `);
   await database.runAsync(
     "INSERT OR IGNORE INTO COMMUNITY (COMMUNITY_ID, PRICE_RATE) VALUES (2, 0.01)",
   );
+  await migrateMeterReadingsAddCommunityId(database);
+}
+
+/** Existing DBs: add COMMUNITY_ID column (defaults to 2). */
+async function migrateMeterReadingsAddCommunityId(database: SQLite.SQLiteDatabase) {
+  const cols = await database.getAllAsync<{ name: string }>(
+    "PRAGMA table_info(METER_READINGS)"
+  );
+  const hasCommunity = (cols ?? []).some((c) => c.name === "COMMUNITY_ID");
+  if (!hasCommunity) {
+    await database.execAsync(
+      `ALTER TABLE METER_READINGS ADD COLUMN COMMUNITY_ID INTEGER NOT NULL DEFAULT ${DEFAULT_COMMUNITY_ID};`
+    );
+  }
 }
 
 /** Delete all data and re-seed default community. Use for dev/reset. */
@@ -91,6 +110,7 @@ export async function getCommunityPriceRate(
 
 export type MeterReadingPayload = {
   METER_ID: number;
+  COMMUNITY_ID: number;
   CURRENT_READING: number;
   WATER_USED: number;
   PRICE: number;
@@ -104,10 +124,11 @@ export async function insertMeterReading(
 ): Promise<void> {
   const database = await getDb();
   await database.runAsync(
-    `INSERT INTO METER_READINGS (METER_ID, CURRENT_READING, WATER_USED, PRICE, DATE_LAST_READ, DATE_CURRENT, LAST_READING)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO METER_READINGS (METER_ID, COMMUNITY_ID, CURRENT_READING, WATER_USED, PRICE, DATE_LAST_READ, DATE_CURRENT, LAST_READING)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       payload.METER_ID,
+      payload.COMMUNITY_ID,
       payload.CURRENT_READING,
       payload.WATER_USED,
       payload.PRICE,
@@ -130,12 +151,35 @@ export async function updateMeterLatestReading(
   );
 }
 
+/** Ensures a COMMUNITY row exists so meters FK and Supabase backup order stay valid. */
+export async function ensureCommunityExists(
+  communityId: number,
+  priceRate: number = 0
+): Promise<void> {
+  const database = await getDb();
+  await database.runAsync(
+    "INSERT OR IGNORE INTO COMMUNITY (COMMUNITY_ID, PRICE_RATE) VALUES (?, ?)",
+    [communityId, priceRate]
+  );
+}
+
+/** True if this meter is registered in METERS (not just orphaned readings). */
+export async function meterExists(meterId: number): Promise<boolean> {
+  const database = await getDb();
+  const row = await database.getFirstAsync<{ one: number }>(
+    "SELECT 1 AS one FROM METERS WHERE METER_ID = ? LIMIT 1",
+    [meterId]
+  );
+  return row != null;
+}
+
 export async function ensureMeterExists(
   meterId: number,
   communityId: number,
   householdName?: string,
 ): Promise<void> {
   const database = await getDb();
+  await ensureCommunityExists(communityId);
   await database.runAsync(
     "INSERT OR IGNORE INTO METERS (METER_ID, COMMUNITY_ID, HOUSEHOLD_NAME, ACTIVE) VALUES (?, ?, ?, 1)",
     [meterId, communityId, householdName ?? `Meter ${meterId}`],
@@ -174,6 +218,7 @@ export async function getMetersByCommunity(
 export type MeterReadingRow = {
   id: number;
   METER_ID: number;
+  COMMUNITY_ID: number;
   CURRENT_READING: number;
   WATER_USED: number;
   PRICE: number;
@@ -187,7 +232,7 @@ export async function getAllMeterReadingsOrderedByDate(): Promise<
 > {
   const database = await getDb();
   const rows = await database.getAllAsync<MeterReadingRow>(
-    "SELECT id, METER_ID, CURRENT_READING, WATER_USED, PRICE, DATE_LAST_READ, DATE_CURRENT, LAST_READING FROM METER_READINGS ORDER BY DATE_CURRENT ASC",
+    "SELECT id, METER_ID, COMMUNITY_ID, CURRENT_READING, WATER_USED, PRICE, DATE_LAST_READ, DATE_CURRENT, LAST_READING FROM METER_READINGS ORDER BY DATE_CURRENT ASC"
   );
   return rows ?? [];
 }
@@ -215,7 +260,7 @@ export async function getAllMeters(): Promise<MeterRow[]> {
 export async function getAllMeterReadings(): Promise<MeterReadingRow[]> {
   const database = await getDb();
   const rows = await database.getAllAsync<MeterReadingRow>(
-    "SELECT id, METER_ID, CURRENT_READING, WATER_USED, PRICE, DATE_LAST_READ, DATE_CURRENT, LAST_READING FROM METER_READINGS ORDER BY id",
+    "SELECT id, METER_ID, COMMUNITY_ID, CURRENT_READING, WATER_USED, PRICE, DATE_LAST_READ, DATE_CURRENT, LAST_READING FROM METER_READINGS ORDER BY id"
   );
   return rows ?? [];
 }
