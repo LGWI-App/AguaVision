@@ -40,7 +40,10 @@ async function pushLocalToCloudQuietly(): Promise<void> {
   } else if (result.error === "Supabase not configured") {
     // expected when .env not set
   } else {
-    console.warn("[Cloud backup] Upload failed (data is still on device):", result.error);
+    console.warn(
+      "[Cloud backup] Upload failed (data is still on device):",
+      result.error,
+    );
   }
 }
 
