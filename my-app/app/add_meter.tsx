@@ -16,7 +16,7 @@ import {
   ensureMeterExists,
   updateMeterLatestReading,
   insertMeterReading,
-  DEFAULT_COMMUNITY_ID,
+  getActiveCommunityId,
 } from "@/lib/db";
 import { requestCloudBackup } from "@/lib/supabase-backup";
 
@@ -67,9 +67,10 @@ export default function AddMeterScreen() {
 
     setSubmitting(true);
     try {
+      const communityId = getActiveCommunityId();
       await ensureMeterExists(
         id,
-        DEFAULT_COMMUNITY_ID,
+        communityId,
         householdName.trim() || undefined,
       );
 
@@ -78,7 +79,7 @@ export default function AddMeterScreen() {
         await updateMeterLatestReading(id, initialReadingNum, now);
         await insertMeterReading({
           METER_ID: id,
-          COMMUNITY_ID: DEFAULT_COMMUNITY_ID,
+          COMMUNITY_ID: communityId,
           CURRENT_READING: initialReadingNum,
           WATER_USED: 0,
           PRICE: 0,
