@@ -21,10 +21,11 @@ import {
 
 export default function AddMeterScreen() {
   const router = useRouter();
-  const { meterId: paramMeterId, reading: paramReading } = useLocalSearchParams<{
-    meterId?: string;
-    reading?: string;
-  }>();
+  const { meterId: paramMeterId, reading: paramReading } =
+    useLocalSearchParams<{
+      meterId?: string;
+      reading?: string;
+    }>();
   const [meterId, setMeterId] = useState("");
   const [householdName, setHouseholdName] = useState("");
   const [initialReading, setInitialReading] = useState("");

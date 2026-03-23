@@ -1,10 +1,6 @@
 import { supabase, isSupabaseConfigured } from "./supabase";
 import type { CommunityRow } from "./db";
-import {
-  getAllCommunities,
-  getAllMeters,
-  getAllMeterReadings,
-} from "./db";
+import { getAllCommunities, getAllMeters, getAllMeterReadings } from "./db";
 
 function formatSupabaseError(err: unknown): string {
   if (err && typeof err === "object") {
@@ -14,7 +10,12 @@ function formatSupabaseError(err: unknown): string {
       hint?: string;
       code?: string;
     };
-    const parts = [o.message, o.details, o.hint, o.code && `code=${o.code}`].filter(Boolean);
+    const parts = [
+      o.message,
+      o.details,
+      o.hint,
+      o.code && `code=${o.code}`,
+    ].filter(Boolean);
     if (parts.length) return parts.join(" | ");
   }
   return err instanceof Error ? err.message : String(err);
@@ -23,7 +24,7 @@ function formatSupabaseError(err: unknown): string {
 /** Merge COMMUNITY rows needed for foreign keys (e.g. meters use COMMUNITY_ID 67 but seed only had 2). */
 function mergeCommunitiesForMeters(
   communities: CommunityRow[],
-  meters: { COMMUNITY_ID: number }[]
+  meters: { COMMUNITY_ID: number }[],
 ): CommunityRow[] {
   const map = new Map<number, CommunityRow>();
   for (const c of communities) {
