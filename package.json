@@ -1,0 +1,12 @@
+{
+  "name": "aguavision",
+  "private": true,
+  "description": "Run the Expo app from my-app — use npm start from repo root or cd my-app",
+  "scripts": {
+    "start": "npm run start --prefix my-app",
+    "ios": "npm run ios --prefix my-app",
+    "android": "npm run android --prefix my-app",
+    "web": "npm run web --prefix my-app",
+    "lint": "npm run lint --prefix my-app"
+  }
+}
