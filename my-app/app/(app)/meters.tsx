@@ -3,6 +3,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import React, { useCallback, useState } from "react";
 import {
     ActivityIndicator,
+    Alert,
     FlatList,
     SafeAreaView,
     StyleSheet,
@@ -11,7 +12,11 @@ import {
     View,
     RefreshControl,
 } from "react-native";
-import { getMetersByCommunity, DEFAULT_COMMUNITY_ID } from "../../lib/db";
+import {
+  clearAllData,
+  getMetersByCommunity,
+  getActiveCommunityId,
+} from "../../lib/db";
 import { Ionicons } from "@expo/vector-icons";
 
 type Meter = {
@@ -33,7 +38,7 @@ export default function MetersPage() {
   const fetchData = useCallback(async () => {
     try {
       setError(null);
-      const data = await getMetersByCommunity(DEFAULT_COMMUNITY_ID);
+      const data = await getMetersByCommunity(getActiveCommunityId());
 
       const formatted: Meter[] = data.map((r) => ({
         id: String(r.METER_ID),
@@ -76,6 +81,28 @@ export default function MetersPage() {
     });
   };
 
+  const onResetLocalDb = () => {
+    Alert.alert(
+      "Reset local database?",
+      "This will clear all local meters and readings on this device.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Reset",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await clearAllData();
+              await fetchData();
+            } catch (err: any) {
+              Alert.alert("Reset failed", err?.message ?? "Unknown error");
+            }
+          },
+        },
+      ],
+    );
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -110,6 +137,15 @@ export default function MetersPage() {
         <Text style={styles.headerSubtitle}>
           {meters.length} {meters.length === 1 ? "meter" : "meters"} available
         </Text>
+        <TouchableOpacity
+          style={styles.resetButton}
+          onPress={onResetLocalDb}
+          accessibilityRole="button"
+          accessibilityLabel="Reset local database"
+        >
+          <Ionicons name="trash-outline" size={16} color="#dc2626" />
+          <Text style={styles.resetButtonText}>Reset local DB</Text>
+        </TouchableOpacity>
       </View>
 
       {meters.length === 0 ? (
@@ -199,7 +235,7 @@ export default function MetersPage() {
                     <View style={styles.detailContent}>
                       <Text style={styles.detailLabel}>Latest Reading</Text>
                       <Text style={styles.detailValue}>
-                        {item.latestReading ?? "N/A"} gallons
+                        {item.latestReading ?? "N/A"} m³
                       </Text>
                     </View>
                   </View>
@@ -213,6 +249,14 @@ export default function MetersPage() {
           }}
         />
       )}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => router.push("/add_meter")}
+        accessibilityRole="button"
+        accessibilityLabel="Add meter"
+      >
+        <Ionicons name="add" size={28} color="#ffffff" />
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -270,6 +314,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6b7280",
     marginLeft: 56,
+  },
+  resetButton: {
+    marginTop: 10,
+    marginLeft: 56,
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    backgroundColor: "#fef2f2",
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  resetButtonText: {
+    color: "#b91c1c",
+    fontSize: 12,
+    fontWeight: "700",
   },
   listContent: {
     padding: 16,
@@ -370,5 +433,21 @@ const styles = StyleSheet.create({
   cardFooter: {
     alignItems: "flex-end",
     marginTop: 4,
+  },
+  fab: {
+    position: "absolute",
+    right: 20,
+    bottom: 24,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#2563eb",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
   },
 });

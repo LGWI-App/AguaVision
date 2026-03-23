@@ -142,6 +142,19 @@ export default function App() {
           <Text style={styles.emptyText}>No readings found</Text>
           {meterId != null && !Number.isNaN(meterId) && (
             <TouchableOpacity
+              style={styles.addReadingButton}
+              onPress={() => router.push(`/?meterId=${meterId}`)}
+              accessibilityRole="button"
+              accessibilityLabel="Add reading for this meter"
+            >
+              <Ionicons name="add-circle-outline" size={20} color="#ffffff" />
+              <Text style={styles.addReadingButtonText}>
+                Add Reading
+              </Text>
+            </TouchableOpacity>
+          )}
+          {meterId != null && !Number.isNaN(meterId) && (
+            <TouchableOpacity
               style={[
                 styles.deleteButton,
                 deleting && styles.deleteButtonDisabled,
@@ -200,6 +213,20 @@ export default function App() {
           </Text>
         </View>
 
+        {meterId != null && !Number.isNaN(meterId) && (
+          <TouchableOpacity
+            style={styles.addReadingButton}
+            onPress={() => router.push(`/?meterId=${meterId}`)}
+            accessibilityRole="button"
+            accessibilityLabel="Add reading for this meter"
+          >
+            <Ionicons name="add-circle-outline" size={20} color="#ffffff" />
+            <Text style={styles.addReadingButtonText}>
+              Add Reading
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {/* Last Reading Card */}
         <View style={styles.card}>
           <View style={styles.lastReadingContainer}>
@@ -230,7 +257,7 @@ export default function App() {
               <Text style={styles.gridValue}>
                 {latestEntry.CURRENT_READING}
               </Text>
-              <Text style={styles.gridUnit}>gallons</Text>
+              <Text style={styles.gridUnit}>m³</Text>
             </View>
             <View style={[styles.gridItem, styles.cyanBackground]}>
               <Text style={styles.gridLabel}>Date</Text>
@@ -256,7 +283,7 @@ export default function App() {
                 <Text style={styles.detailValue}>{latestEntry.WATER_USED}</Text>
               </View>
             </View>
-            <Text style={styles.detailUnit}>gallons</Text>
+            <Text style={styles.detailUnit}>m³</Text>
           </View>
 
           {/* Price */}
@@ -285,7 +312,7 @@ export default function App() {
                 <Text style={styles.detailValue}>${priceRate}</Text>
               </View>
             </View>
-            <Text style={styles.detailUnit}>per gallon</Text>
+            <Text style={styles.detailUnit}>per m³</Text>
           </View>
         </View>
 
@@ -526,6 +553,24 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 14,
     color: "#6b7280",
+  },
+  addReadingButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "flex-end",
+    gap: 6,
+    backgroundColor: "#2563eb",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginTop: 0,
+    marginBottom: 12,
+  },
+  addReadingButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#ffffff",
   },
   deleteButton: {
     flexDirection: "row",

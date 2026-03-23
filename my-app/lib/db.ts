@@ -2,6 +2,18 @@ import * as SQLite from "expo-sqlite";
 
 /** Default community for new meters and meter readings (change one place to retarget the app). */
 export const DEFAULT_COMMUNITY_ID = 2;
+let activeCommunityId = DEFAULT_COMMUNITY_ID;
+
+/** Active community used by app screens after login. */
+export function getActiveCommunityId(): number {
+  return activeCommunityId;
+}
+
+export function setActiveCommunityId(communityId: number): void {
+  if (Number.isFinite(communityId) && communityId > 0) {
+    activeCommunityId = Math.trunc(communityId);
+  }
+}
 
 const DB_NAME = "aguavision.db";
 let db: SQLite.SQLiteDatabase | null = null;
@@ -82,7 +94,7 @@ export async function clearAllData(): Promise<void> {
     DELETE FROM METER_READINGS;
     DELETE FROM METERS;
     DELETE FROM COMMUNITY;
-    INSERT OR IGNORE INTO COMMUNITY (COMMUNITY_ID, PRICE_RATE) VALUES (2, 0.01);
+    INSERT OR IGNORE INTO COMMUNITY (COMMUNITY_ID, PRICE_RATE) VALUES (${activeCommunityId}, 0.01);
   `);
 }
 
@@ -111,6 +123,22 @@ export async function getCommunityPriceRate(
     [communityId],
   );
   return row ? Number(row.PRICE_RATE) : 0;
+}
+
+export type CommunityInfoRow = {
+  COMMUNITY_ID: number;
+  PRICE_RATE: number;
+};
+
+export async function getCommunityInfo(
+  communityId: number,
+): Promise<CommunityInfoRow | null> {
+  const database = await getDb();
+  const row = await database.getFirstAsync<CommunityInfoRow>(
+    "SELECT COMMUNITY_ID, PRICE_RATE FROM COMMUNITY WHERE COMMUNITY_ID = ? LIMIT 1",
+    [communityId],
+  );
+  return row ?? null;
 }
 
 export type MeterReadingPayload = {
@@ -261,7 +289,10 @@ export async function getAllMeterReadingsOrderedByDate(): Promise<
 
 // --- For Supabase backup (full table dumps) ---
 
-export type CommunityRow = { COMMUNITY_ID: number; PRICE_RATE: number };
+export type CommunityRow = {
+  COMMUNITY_ID: number;
+  PRICE_RATE: number;
+};
 
 export async function getAllCommunities(): Promise<CommunityRow[]> {
   const database = await getDb();
@@ -285,4 +316,89 @@ export async function getAllMeterReadings(): Promise<MeterReadingRow[]> {
     "SELECT id, METER_ID, COMMUNITY_ID, CURRENT_READING, WATER_USED, PRICE, DATE_LAST_READ, DATE_CURRENT, LAST_READING FROM METER_READINGS ORDER BY id",
   );
   return rows ?? [];
+}
+
+/**
+ * Replace local rows for one community with a snapshot pulled from Supabase.
+ * Keeps other communities untouched.
+ */
+export async function replaceLocalCommunitySnapshot(
+  community: CommunityRow,
+  meters: MeterRow[],
+  readings: MeterReadingRow[],
+): Promise<void> {
+  const database = await getDb();
+
+  await database.runAsync(
+    `INSERT INTO COMMUNITY (COMMUNITY_ID, PRICE_RATE)
+     VALUES (?, ?)
+     ON CONFLICT(COMMUNITY_ID) DO UPDATE SET PRICE_RATE = excluded.PRICE_RATE`,
+    [community.COMMUNITY_ID, community.PRICE_RATE],
+  );
+
+  // Remove readings that belong to meters currently assigned to this community.
+  // This avoids FK failures when legacy rows have mismatched COMMUNITY_ID values.
+  await database.runAsync(
+    `DELETE FROM METER_READINGS
+     WHERE METER_ID IN (SELECT METER_ID FROM METERS WHERE COMMUNITY_ID = ?)`,
+    [community.COMMUNITY_ID],
+  );
+  await database.runAsync("DELETE FROM METERS WHERE COMMUNITY_ID = ?", [
+    community.COMMUNITY_ID,
+  ]);
+
+  for (const meter of meters) {
+    await database.runAsync(
+      `INSERT INTO METERS (METER_ID, HOUSEHOLD_NAME, COMMUNITY_ID, ACTIVE, LAST_READ_DATE, LATEST_READING)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(METER_ID) DO UPDATE SET
+         HOUSEHOLD_NAME = excluded.HOUSEHOLD_NAME,
+         COMMUNITY_ID = excluded.COMMUNITY_ID,
+         ACTIVE = excluded.ACTIVE,
+         LAST_READ_DATE = excluded.LAST_READ_DATE,
+         LATEST_READING = excluded.LATEST_READING`,
+      [
+        meter.METER_ID,
+        meter.HOUSEHOLD_NAME,
+        meter.COMMUNITY_ID,
+        meter.ACTIVE,
+        meter.LAST_READ_DATE,
+        meter.LATEST_READING,
+      ],
+    );
+  }
+
+  const validMeterIds = new Set(meters.map((m) => m.METER_ID));
+  const safeReadings = readings.filter(
+    (row) =>
+      row.COMMUNITY_ID === community.COMMUNITY_ID &&
+      validMeterIds.has(row.METER_ID),
+  );
+
+  for (const row of safeReadings) {
+    await database.runAsync(
+      `INSERT INTO METER_READINGS (id, METER_ID, COMMUNITY_ID, CURRENT_READING, WATER_USED, PRICE, DATE_LAST_READ, DATE_CURRENT, LAST_READING)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         METER_ID = excluded.METER_ID,
+         COMMUNITY_ID = excluded.COMMUNITY_ID,
+         CURRENT_READING = excluded.CURRENT_READING,
+         WATER_USED = excluded.WATER_USED,
+         PRICE = excluded.PRICE,
+         DATE_LAST_READ = excluded.DATE_LAST_READ,
+         DATE_CURRENT = excluded.DATE_CURRENT,
+         LAST_READING = excluded.LAST_READING`,
+      [
+        row.id,
+        row.METER_ID,
+        row.COMMUNITY_ID,
+        row.CURRENT_READING,
+        row.WATER_USED,
+        row.PRICE,
+        row.DATE_LAST_READ,
+        row.DATE_CURRENT,
+        row.LAST_READING,
+      ],
+    );
+  }
 }

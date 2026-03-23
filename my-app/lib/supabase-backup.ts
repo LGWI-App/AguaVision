@@ -1,7 +1,14 @@
 import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
 import { supabase, isSupabaseConfigured } from "./supabase";
 import type { CommunityRow } from "./db";
-import { getAllCommunities, getAllMeters, getAllMeterReadings } from "./db";
+import {
+  getAllCommunities,
+  getAllMeters,
+  getAllMeterReadings,
+  replaceLocalCommunitySnapshot,
+  type MeterReadingRow,
+  type MeterRow,
+} from "./db";
 
 const BACKUP_DEBOUNCE_MS = 1200;
 
@@ -66,6 +73,38 @@ function formatSupabaseError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+function withLatestMeterValues(
+  meters: MeterRow[],
+  readings: MeterReadingRow[],
+): MeterRow[] {
+  const byMeter = new Map<number, MeterReadingRow>();
+  for (const row of readings) {
+    const current = byMeter.get(row.METER_ID);
+    if (!current) {
+      byMeter.set(row.METER_ID, row);
+      continue;
+    }
+    const currentTs = Date.parse(current.DATE_CURRENT);
+    const rowTs = Date.parse(row.DATE_CURRENT);
+    if (Number.isFinite(rowTs) && (!Number.isFinite(currentTs) || rowTs > currentTs)) {
+      byMeter.set(row.METER_ID, row);
+    }
+  }
+
+  return meters.map((meter) => {
+    const latestRow = byMeter.get(meter.METER_ID);
+    if (!latestRow) return meter;
+    return {
+      ...meter,
+      LATEST_READING:
+        meter.LATEST_READING == null
+          ? latestRow.CURRENT_READING
+          : meter.LATEST_READING,
+      LAST_READ_DATE: meter.LAST_READ_DATE ?? latestRow.DATE_CURRENT,
+    };
+  });
+}
+
 /** Merge COMMUNITY rows needed for foreign keys (e.g. meters use COMMUNITY_ID 67 but seed only had 2). */
 function mergeCommunitiesForMeters(
   communities: CommunityRow[],
@@ -77,10 +116,20 @@ function mergeCommunitiesForMeters(
   }
   for (const m of meters) {
     if (!map.has(m.COMMUNITY_ID)) {
-      map.set(m.COMMUNITY_ID, { COMMUNITY_ID: m.COMMUNITY_ID, PRICE_RATE: 0 });
+      map.set(m.COMMUNITY_ID, {
+        COMMUNITY_ID: m.COMMUNITY_ID,
+        PRICE_RATE: 0,
+      });
     }
   }
   return Array.from(map.values());
+}
+
+function normalizeCommunityRow(row: any): CommunityRow {
+  return {
+    COMMUNITY_ID: Number(row.COMMUNITY_ID),
+    PRICE_RATE: Number(row.PRICE_RATE ?? 0),
+  };
 }
 
 /**
@@ -157,4 +206,59 @@ export function requestCloudBackup(): void {
       await pushLocalToCloudQuietly();
     })();
   }, BACKUP_DEBOUNCE_MS);
+}
+
+/**
+ * Pull one community snapshot from Supabase into local SQLite.
+ * Used at login to load preexisting community data onto device.
+ */
+export async function syncCommunityFromSupabase(
+  communityId: number,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured() || !supabase) {
+    return { ok: false, error: "Supabase not configured" };
+  }
+
+  try {
+    const { data: community, error: communityError } = await supabase
+      .from("COMMUNITY")
+      .select("COMMUNITY_ID, PRICE_RATE")
+      .eq("COMMUNITY_ID", communityId)
+      .single();
+    if (communityError) throw communityError;
+
+    const { data: metersRaw, error: metersError } = await supabase
+      .from("METERS")
+      .select(
+        "METER_ID, HOUSEHOLD_NAME, COMMUNITY_ID, ACTIVE, LAST_READ_DATE, LATEST_READING",
+      )
+      .eq("COMMUNITY_ID", communityId);
+    if (metersError) throw metersError;
+
+    const { data: readingsRaw, error: readingsError } = await supabase
+      .from("METER_READINGS")
+      .select(
+        "id, METER_ID, COMMUNITY_ID, CURRENT_READING, WATER_USED, PRICE, DATE_LAST_READ, DATE_CURRENT, LAST_READING",
+      )
+      .eq("COMMUNITY_ID", communityId);
+    if (readingsError) throw readingsError;
+
+    const meters = withLatestMeterValues(
+      (metersRaw ?? []) as MeterRow[],
+      (readingsRaw ?? []) as MeterReadingRow[],
+    );
+    const readings = (readingsRaw ?? []) as MeterReadingRow[];
+
+    await replaceLocalCommunitySnapshot(
+      normalizeCommunityRow(community),
+      meters,
+      readings,
+    );
+
+    return { ok: true };
+  } catch (err) {
+    const message = formatSupabaseError(err);
+    console.warn("[Supabase hydrate]", message, err);
+    return { ok: false, error: message };
+  }
 }

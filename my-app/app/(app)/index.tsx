@@ -14,17 +14,17 @@ import {
   Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   getLastReadingForMeter,
   getCommunityPriceRate,
   insertMeterReading,
   updateMeterLatestReading,
   meterExistsInCommunity,
-  DEFAULT_COMMUNITY_ID,
+  getActiveCommunityId,
 } from "../../lib/db";
 import { requestCloudBackup } from "../../lib/supabase-backup";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { CameraView, useCameraPermissions } from "expo-camera";
@@ -36,6 +36,7 @@ import { Linking, Platform } from "react-native";
 
 export default function MeterSubmission() {
   const router = useRouter();
+  const { meterId: meterIdParam } = useLocalSearchParams<{ meterId?: string }>();
   const [meterId, setMeterId] = useState<string>("");
   const [reading, setReading] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
@@ -44,6 +45,12 @@ export default function MeterSubmission() {
   const [showCamera, setShowCamera] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView>(null);
+
+  useEffect(() => {
+    if (meterIdParam != null && String(meterIdParam).trim() !== "") {
+      setMeterId(String(meterIdParam).trim());
+    }
+  }, [meterIdParam]);
 
   // Get API key from environment variable
   const GOOGLE_VISION_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_VISION_API_KEY || "";
@@ -305,7 +312,8 @@ export default function MeterSubmission() {
 
     setSubmitting(true);
     try {
-      const exists = await meterExistsInCommunity(id, DEFAULT_COMMUNITY_ID);
+      const communityId = getActiveCommunityId();
+      const exists = await meterExistsInCommunity(id, communityId);
       if (!exists) {
         const q = new URLSearchParams({
           meterId: String(id),
@@ -315,16 +323,16 @@ export default function MeterSubmission() {
         return;
       }
 
-      const lastRow = await getLastReadingForMeter(id, DEFAULT_COMMUNITY_ID);
+      const lastRow = await getLastReadingForMeter(id, communityId);
       const lastReading = lastRow ? Number(lastRow.CURRENT_READING) : 0;
       const waterUsed = current - lastReading;
 
-      const priceRate = await getCommunityPriceRate(DEFAULT_COMMUNITY_ID);
+      const priceRate = await getCommunityPriceRate(communityId);
       const computedPrice = Math.max(0, waterUsed) * priceRate;
 
       const payload = {
         METER_ID: id,
-        COMMUNITY_ID: DEFAULT_COMMUNITY_ID,
+        COMMUNITY_ID: communityId,
         CURRENT_READING: current,
         WATER_USED: waterUsed >= 0 ? waterUsed : 0,
         PRICE: computedPrice,
@@ -411,7 +419,7 @@ export default function MeterSubmission() {
                 </View>
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter current reading (gallons)"
+                  placeholder="Enter current reading (m³)"
                   placeholderTextColor="#9ca3af"
                   keyboardType="numeric"
                   value={reading}
