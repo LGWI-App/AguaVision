@@ -62,7 +62,8 @@ export default function SignIn() {
   }, []);
 
   const selectedCommunity = useMemo(
-    () => communities.find((c) => c.COMMUNITY_ID === selectedCommunityId) ?? null,
+    () =>
+      communities.find((c) => c.COMMUNITY_ID === selectedCommunityId) ?? null,
     [communities, selectedCommunityId],
   );
 
@@ -118,7 +119,10 @@ export default function SignIn() {
       ) : (
         <View style={styles.form}>
           <Text style={styles.label}>Location</Text>
-          <Pressable style={styles.dropdown} onPress={() => setPickerOpen(true)}>
+          <Pressable
+            style={styles.dropdown}
+            onPress={() => setPickerOpen(true)}
+          >
             <Text style={styles.dropdownText}>
               {selectedCommunity?.LOCATION_NAME ??
                 (selectedCommunity
@@ -152,7 +156,10 @@ export default function SignIn() {
       )}
 
       <Modal visible={pickerOpen} transparent animationType="fade">
-        <Pressable style={styles.modalBackdrop} onPress={() => setPickerOpen(false)}>
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setPickerOpen(false)}
+        >
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Select Location</Text>
             {communities.map((community) => (
@@ -165,7 +172,8 @@ export default function SignIn() {
                 }}
               >
                 <Text style={styles.modalOptionText}>
-                  {community.LOCATION_NAME ?? `Community ${community.COMMUNITY_ID}`}
+                  {community.LOCATION_NAME ??
+                    `Community ${community.COMMUNITY_ID}`}
                 </Text>
               </TouchableOpacity>
             ))}

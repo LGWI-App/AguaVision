@@ -86,7 +86,10 @@ function withLatestMeterValues(
     }
     const currentTs = Date.parse(current.DATE_CURRENT);
     const rowTs = Date.parse(row.DATE_CURRENT);
-    if (Number.isFinite(rowTs) && (!Number.isFinite(currentTs) || rowTs > currentTs)) {
+    if (
+      Number.isFinite(rowTs) &&
+      (!Number.isFinite(currentTs) || rowTs > currentTs)
+    ) {
       byMeter.set(row.METER_ID, row);
     }
   }

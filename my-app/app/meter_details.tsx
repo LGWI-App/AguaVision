@@ -148,9 +148,7 @@ export default function App() {
               accessibilityLabel="Add reading for this meter"
             >
               <Ionicons name="add-circle-outline" size={20} color="#ffffff" />
-              <Text style={styles.addReadingButtonText}>
-                Add Reading
-              </Text>
+              <Text style={styles.addReadingButtonText}>Add Reading</Text>
             </TouchableOpacity>
           )}
           {meterId != null && !Number.isNaN(meterId) && (
@@ -221,9 +219,7 @@ export default function App() {
             accessibilityLabel="Add reading for this meter"
           >
             <Ionicons name="add-circle-outline" size={20} color="#ffffff" />
-            <Text style={styles.addReadingButtonText}>
-              Add Reading
-            </Text>
+            <Text style={styles.addReadingButtonText}>Add Reading</Text>
           </TouchableOpacity>
         )}
 
