@@ -123,7 +123,7 @@ export default function MetersPage() {
         <FlatList
           data={meters}
           keyExtractor={(i) => i.id}
-          contentContainerStyle={[styles.listContent, { paddingBottom: 80 }]}
+          contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
@@ -213,15 +213,6 @@ export default function MetersPage() {
           }}
         />
       )}
-
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => router.push("/add_meter")}
-        accessibilityRole="button"
-        accessibilityLabel="Add new meter"
-      >
-        <Ionicons name="add" size={28} color="#ffffff" />
-      </TouchableOpacity>
     </SafeAreaView>
   );
 }
@@ -379,21 +370,5 @@ const styles = StyleSheet.create({
   cardFooter: {
     alignItems: "flex-end",
     marginTop: 4,
-  },
-  fab: {
-    position: "absolute",
-    right: 20,
-    bottom: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#2563eb",
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
   },
 });

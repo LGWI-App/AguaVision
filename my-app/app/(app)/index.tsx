@@ -335,7 +335,18 @@ export default function MeterSubmission() {
       await insertMeterReading(payload);
       await updateMeterLatestReading(id, current, new Date().toISOString());
 
-      import("@/lib/supabase-backup").then(({ syncLocalToSupabase }) => syncLocalToSupabase());
+      import("@/lib/supabase-backup")
+        .then(async ({ syncLocalToSupabase }) => {
+          const result = await syncLocalToSupabase();
+          console.log("[Supabase backup] syncLocalToSupabase result:", result);
+        })
+        .catch((err) => {
+          console.error(
+            "[Supabase backup] Failed to run syncLocalToSupabase:",
+            err,
+          );
+        });
+
       Alert.alert("Success", "Meter reading submitted.");
       setMeterId("");
       setReading("");
