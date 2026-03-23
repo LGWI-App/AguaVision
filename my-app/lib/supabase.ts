@@ -1,3 +1,4 @@
+/** Client for optional **cloud backup** only — the app does not read Supabase for normal UI. */
 import { createClient } from "@supabase/supabase-js";
 import Constants from "expo-constants";
 

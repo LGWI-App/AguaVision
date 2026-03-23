@@ -13,6 +13,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { getAllMeterReadingsOrderedByDate, deleteMeter } from "../lib/db";
+import { requestCloudBackup } from "../lib/supabase-backup";
 
 interface MeterReading {
   idx: number;
@@ -99,6 +100,7 @@ export default function App() {
             setDeleting(true);
             try {
               await deleteMeter(meterId);
+              requestCloudBackup();
               router.back();
             } catch (err) {
               Alert.alert(

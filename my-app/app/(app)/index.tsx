@@ -23,6 +23,7 @@ import {
   meterExistsInCommunity,
   DEFAULT_COMMUNITY_ID,
 } from "../../lib/db";
+import { requestCloudBackup } from "../../lib/supabase-backup";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -335,17 +336,7 @@ export default function MeterSubmission() {
       await insertMeterReading(payload);
       await updateMeterLatestReading(id, current, new Date().toISOString());
 
-      import("@/lib/supabase-backup")
-        .then(async ({ syncLocalToSupabase }) => {
-          const result = await syncLocalToSupabase();
-          console.log("[Supabase backup] syncLocalToSupabase result:", result);
-        })
-        .catch((err) => {
-          console.error(
-            "[Supabase backup] Failed to run syncLocalToSupabase:",
-            err,
-          );
-        });
+      requestCloudBackup();
 
       Alert.alert("Success", "Meter reading submitted.");
       setMeterId("");

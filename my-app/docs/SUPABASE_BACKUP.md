@@ -1,6 +1,10 @@
 # Supabase backup (local SQLite → cloud)
 
-The app **only reads/writes SQLite** on device. `syncLocalToSupabase()` **pushes** rows to Supabase as a backup when configured.
+The app is **offline-first**: all meter work uses **SQLite** on the device. Supabase is only a **cloud copy** of that data.
+
+Use **`requestCloudBackup()`** (already wired after saves) instead of calling `syncLocalToSupabase()` directly from screens. It **debounces** uploads and, if the device is offline, **waits until NetInfo reports a usable network**, then runs one full snapshot upload. Opening the app (or returning to the foreground) also schedules a backup so data added while offline can sync later.
+
+`syncLocalToSupabase()` remains available for tests or tooling; it does not check the network.
 
 ## 1. Environment variables (`my-app/.env`)
 
@@ -47,8 +51,12 @@ Tighten these for production (e.g. only your org’s rows).
 
 ## 4. Verify in logs
 
-After adding a meter, look for:
+When online and configured, after a reading or meter change you should see:
 
-`[Supabase backup] syncLocalToSupabase result: { ok: true }`
+`[Cloud backup] Full SQLite snapshot uploaded.`
 
-If `ok: false`, the `error` string usually mentions permission denied (`42501`), missing table, or bad key.
+If you were offline when saving:
+
+`[Cloud backup] Device offline; will upload when a network is available.`
+
+If upload fails while online, data is still on the device; check for permission denied (`42501`), missing table, or bad key in the warning line.

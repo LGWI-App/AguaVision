@@ -1,6 +1,48 @@
+import NetInfo, { type NetInfoState } from "@react-native-community/netinfo";
 import { supabase, isSupabaseConfigured } from "./supabase";
 import type { CommunityRow } from "./db";
 import { getAllCommunities, getAllMeters, getAllMeterReadings } from "./db";
+
+const BACKUP_DEBOUNCE_MS = 1200;
+
+let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectUnsub: (() => void) | null = null;
+
+/** Treat as online: connected and not explicitly unreachable (null = unknown → still try). */
+function networkLikelyReachable(state: NetInfoState): boolean {
+  if (!state.isConnected) return false;
+  if (state.isInternetReachable === false) return false;
+  return true;
+}
+
+function clearReconnectListener(): void {
+  reconnectUnsub?.();
+  reconnectUnsub = null;
+}
+
+/**
+ * When offline, listen once for a reachable network then push a full backup.
+ * Local SQLite is already saved; this only affects cloud copy.
+ */
+function ensureReconnectBackupListener(): void {
+  if (reconnectUnsub) return;
+  reconnectUnsub = NetInfo.addEventListener((s) => {
+    if (!networkLikelyReachable(s)) return;
+    clearReconnectListener();
+    void pushLocalToCloudQuietly();
+  });
+}
+
+async function pushLocalToCloudQuietly(): Promise<void> {
+  const result = await syncLocalToSupabase();
+  if (result.ok) {
+    console.log("[Cloud backup] Full SQLite snapshot uploaded.");
+  } else if (result.error === "Supabase not configured") {
+    // expected when .env not set
+  } else {
+    console.warn("[Cloud backup] Upload failed (data is still on device):", result.error);
+  }
+}
 
 function formatSupabaseError(err: unknown): string {
   if (err && typeof err === "object") {
@@ -39,9 +81,9 @@ function mergeCommunitiesForMeters(
 }
 
 /**
- * Push all local SQLite data to Supabase for backup.
- * Only runs when Supabase is configured and requests succeed (assumes online).
- * Never reads from Supabase; app always uses SQLite.
+ * Push all local SQLite data to Supabase (backup only).
+ * Does not read from Supabase. Call `requestCloudBackup()` from UI so offline
+ * work queues until the device has a network route.
  */
 export async function syncLocalToSupabase(): Promise<{
   ok: boolean;
@@ -87,4 +129,29 @@ export async function syncLocalToSupabase(): Promise<{
     console.warn("[Supabase backup]", message, err);
     return { ok: false, error: message };
   }
+}
+
+/**
+ * Non-blocking: debounced full upload after local DB changes.
+ * Offline → waits for connectivity (listener), then uploads once.
+ * Never throws; never blocks reads/writes to SQLite.
+ */
+export function requestCloudBackup(): void {
+  if (!isSupabaseConfigured()) return;
+
+  if (debounceTimer != null) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => {
+    debounceTimer = null;
+    void (async () => {
+      const state = await NetInfo.fetch();
+      if (!networkLikelyReachable(state)) {
+        console.log(
+          "[Cloud backup] Device offline; will upload when a network is available.",
+        );
+        ensureReconnectBackupListener();
+        return;
+      }
+      await pushLocalToCloudQuietly();
+    })();
+  }, BACKUP_DEBOUNCE_MS);
 }

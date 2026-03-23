@@ -18,6 +18,7 @@ import {
   insertMeterReading,
   DEFAULT_COMMUNITY_ID,
 } from "@/lib/db";
+import { requestCloudBackup } from "@/lib/supabase-backup";
 
 export default function AddMeterScreen() {
   const router = useRouter();
@@ -87,17 +88,8 @@ export default function AddMeterScreen() {
         });
       }
 
-      import("@/lib/supabase-backup")
-        .then(async ({ syncLocalToSupabase }) => {
-          const result = await syncLocalToSupabase();
-          console.log("[Supabase backup] syncLocalToSupabase result:", result);
-        })
-        .catch((err) => {
-          console.error(
-            "[Supabase backup] Failed to run syncLocalToSupabase:",
-            err,
-          );
-        });
+      requestCloudBackup();
+
       Alert.alert(
         "Meter added",
         "The meter has been added to your community.",
