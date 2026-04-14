@@ -11,19 +11,49 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+<<<<<<< HEAD
 import { useState } from "react";
 import { supabase } from "../../lib/supabase";
+=======
+import { useState, useRef, useEffect } from "react";
+import {
+  getLastReadingForMeter,
+  getCommunityPriceRate,
+  insertMeterReading,
+  updateMeterLatestReading,
+  meterExistsInCommunity,
+  getActiveCommunityId,
+} from "../../lib/db";
+import { requestCloudBackup } from "../../lib/supabase-backup";
+import { useLocalSearchParams, useRouter } from "expo-router";
+>>>>>>> 9488667de9c98ad05ac0046f530c814c18d097f9
 import { Ionicons } from "@expo/vector-icons";
 import { OcrDemo } from "../../components/OcrDemo";
 
 
 
 export default function MeterSubmission() {
+  const router = useRouter();
+  const { meterId: meterIdParam } = useLocalSearchParams<{ meterId?: string }>();
   const [meterId, setMeterId] = useState<string>("");
   const [reading, setReading] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+<<<<<<< HEAD
   const [showOcrDemo, setShowOcrDemo] = useState(false);
   const USER_COMMUNITY_ID = 2;
+=======
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [processingOCR, setProcessingOCR] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const cameraRef = useRef<CameraView>(null);
+
+  useEffect(() => {
+    if (meterIdParam != null && String(meterIdParam).trim() !== "") {
+      setMeterId(String(meterIdParam).trim());
+    }
+  }, [meterIdParam]);
+>>>>>>> 9488667de9c98ad05ac0046f530c814c18d097f9
 
   function handleOpenOcr() {
     setShowOcrDemo(true);
@@ -40,64 +70,39 @@ export default function MeterSubmission() {
 
     setSubmitting(true);
     try {
-      // fetch last reading for this meter (most recent by DATE_CURRENT or DATE_LAST_READ)
-      const { data: lastRows, error: fetchError } = await supabase
-        .from("METER_READINGS")
-        .select("CURRENT_READING, DATE_CURRENT")
-        .eq("METER_ID", id)
-        .order("DATE_CURRENT", { ascending: false })
-        .limit(1);
-
-      if (fetchError) throw fetchError;
-
-      const lastReading = lastRows && lastRows.length > 0 ? Number(lastRows[0].CURRENT_READING) : 0;
-      const waterUsed = current - lastReading;
-      // fetch PRICE_RATE from uppercase COMMUNITY table (use USER_COMMUNITY_ID like in meters.tsx)
-      let priceRate = 0;
-      try {
-        const { data: communityRows, error: communityError } = await supabase
-          .from("COMMUNITY")
-          .select("PRICE_RATE")
-          .eq("COMMUNITY_ID", USER_COMMUNITY_ID)
-          .limit(1);
-        if (communityError) throw communityError;
-        if (communityRows && communityRows.length > 0) {
-          priceRate = Number(communityRows[0].PRICE_RATE) || 0;
-        }
-      } catch (err) {
-        console.warn("Could not read COMMUNITY.PRICE_RATE", err);
-        priceRate = 0;
+      const communityId = getActiveCommunityId();
+      const exists = await meterExistsInCommunity(id, communityId);
+      if (!exists) {
+        const q = new URLSearchParams({
+          meterId: String(id),
+          reading: String(current),
+        }).toString();
+        router.push(`/add_meter?${q}` as const);
+        return;
       }
 
-      // compute price
+      const lastRow = await getLastReadingForMeter(id, communityId);
+      const lastReading = lastRow ? Number(lastRow.CURRENT_READING) : 0;
+      const waterUsed = current - lastReading;
+
+      const priceRate = await getCommunityPriceRate(communityId);
       const computedPrice = Math.max(0, waterUsed) * priceRate;
 
-      // insert new row
       const payload = {
         METER_ID: id,
+        COMMUNITY_ID: communityId,
         CURRENT_READING: current,
         WATER_USED: waterUsed >= 0 ? waterUsed : 0,
         PRICE: computedPrice,
-        DATE_LAST_READ: lastRows && lastRows.length > 0 ? lastRows[0].DATE_CURRENT : null,
+        DATE_LAST_READ: lastRow ? lastRow.DATE_CURRENT : null,
         DATE_CURRENT: new Date().toISOString(),
-        LAST_READING: lastReading
-      } as any;
+        LAST_READING: lastReading,
+      };
 
-      // Update Meters table with new latest reading and last read date
-      const { error: updateError } = await supabase
-        .from("METERS")
-        .update({
-          LATEST_READING: current,
-          LAST_READ_DATE: new Date().toISOString(),
-        })
-        .eq("METER_ID", id);
+      await insertMeterReading(payload);
+      await updateMeterLatestReading(id, current, new Date().toISOString());
 
-      if (updateError) throw updateError; 
-
-
-  console.log("Submitting payload", payload, { priceRate, computedPrice, waterUsed });
-  const { error: insertError } = await supabase.from("METER_READINGS").insert([payload]);
-  if (insertError) throw insertError;
+      requestCloudBackup();
 
       Alert.alert("Success", "Meter reading submitted.");
       setMeterId("");
@@ -172,7 +177,7 @@ export default function MeterSubmission() {
                 </View>
                 <TextInput
                   style={styles.input}
-                  placeholder="Enter current reading (gallons)"
+                  placeholder="Enter current reading (m³)"
                   placeholderTextColor="#9ca3af"
                   keyboardType="numeric"
                   value={reading}
