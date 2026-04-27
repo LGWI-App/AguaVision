@@ -135,6 +135,22 @@ function normalizeCommunityRow(row: any): CommunityRow {
   };
 }
 
+function normalizeMeterReadingRow(row: Record<string, unknown>): MeterReadingRow {
+  return {
+    id: Number(row.id),
+    METER_ID: Number(row.METER_ID),
+    COMMUNITY_ID: Number(row.COMMUNITY_ID),
+    CURRENT_READING: Number(row.CURRENT_READING),
+    WATER_USED: Number(row.WATER_USED ?? 0),
+    PRICE: Number(row.PRICE ?? 0),
+    DATE_LAST_READ:
+      row.DATE_LAST_READ == null ? null : String(row.DATE_LAST_READ),
+    DATE_CURRENT: String(row.DATE_CURRENT),
+    LAST_READING: Number(row.LAST_READING ?? 0),
+    PAID: row.PAID == null ? 0 : Number(row.PAID),
+  };
+}
+
 /**
  * Push all local SQLite data to Supabase (backup only).
  * Does not read from Supabase. Call `requestCloudBackup()` from UI so offline
@@ -241,16 +257,20 @@ export async function syncCommunityFromSupabase(
     const { data: readingsRaw, error: readingsError } = await supabase
       .from("METER_READINGS")
       .select(
-        "id, METER_ID, COMMUNITY_ID, CURRENT_READING, WATER_USED, PRICE, DATE_LAST_READ, DATE_CURRENT, LAST_READING",
+        "id, METER_ID, COMMUNITY_ID, CURRENT_READING, WATER_USED, PRICE, DATE_LAST_READ, DATE_CURRENT, LAST_READING, PAID",
       )
       .eq("COMMUNITY_ID", communityId);
     if (readingsError) throw readingsError;
 
+    const readingsNormalized = (readingsRaw ?? []).map((r) =>
+      normalizeMeterReadingRow(r as Record<string, unknown>),
+    );
+
     const meters = withLatestMeterValues(
       (metersRaw ?? []) as MeterRow[],
-      (readingsRaw ?? []) as MeterReadingRow[],
+      readingsNormalized,
     );
-    const readings = (readingsRaw ?? []) as MeterReadingRow[];
+    const readings = readingsNormalized;
 
     await replaceLocalCommunitySnapshot(
       normalizeCommunityRow(community),

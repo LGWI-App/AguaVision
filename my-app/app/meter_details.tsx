@@ -12,7 +12,11 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { getAllMeterReadingsOrderedByDate, deleteMeter } from "../lib/db";
+import {
+  getAllMeterReadingsOrderedByDate,
+  deleteMeter,
+  setMeterReadingPaid,
+} from "../lib/db";
 import { requestCloudBackup } from "../lib/supabase-backup";
 
 interface MeterReading {
@@ -26,6 +30,8 @@ interface MeterReading {
   DATE_CURRENT: string;
   LAST_READING: number;
   entry_id: number;
+  /** 0 = unpaid, 1 = paid */
+  PAID: number;
 }
 
 export default function App() {
@@ -37,6 +43,7 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [markingPaidId, setMarkingPaidId] = useState<number | null>(null);
 
   const fetchData = async () => {
     try {
@@ -53,6 +60,7 @@ export default function App() {
         DATE_CURRENT: r.DATE_CURRENT,
         LAST_READING: r.LAST_READING,
         entry_id: r.id,
+        PAID: Number(r.PAID ?? 0),
       }));
       const filtered =
         meterId != null && !Number.isNaN(meterId)
@@ -84,6 +92,22 @@ export default function App() {
       day: "numeric",
       year: "numeric",
     });
+  };
+
+  const handleMarkPaid = async (readingId: number) => {
+    setMarkingPaidId(readingId);
+    try {
+      await setMeterReadingPaid(readingId, true);
+      requestCloudBackup();
+      await fetchData();
+    } catch (err) {
+      Alert.alert(
+        "Error",
+        err instanceof Error ? err.message : "Could not update payment status.",
+      );
+    } finally {
+      setMarkingPaidId(null);
+    }
   };
 
   const handleDeleteMeter = () => {
@@ -178,6 +202,10 @@ export default function App() {
     latestEntry.WATER_USED > 0
       ? (latestEntry.PRICE / latestEntry.WATER_USED).toFixed(2)
       : "0.00";
+  const latestIsPaid = latestEntry.PAID === 1;
+  const historyNewestFirst = [...data].reverse();
+  const showMeterScopedSummary =
+    meterId != null && !Number.isNaN(meterId);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -221,6 +249,56 @@ export default function App() {
             <Ionicons name="add-circle-outline" size={20} color="#ffffff" />
             <Text style={styles.addReadingButtonText}>Add Reading</Text>
           </TouchableOpacity>
+        )}
+
+        {showMeterScopedSummary && (
+          <View
+            style={[
+              styles.card,
+              styles.paymentSummaryCard,
+              latestIsPaid ? styles.paymentSummaryPaid : styles.paymentSummaryUnpaid,
+            ]}
+          >
+            <View style={styles.paymentSummaryRow}>
+              <View
+                style={[
+                  styles.paymentSummaryIcon,
+                  latestIsPaid ? styles.paymentSummaryIconPaid : styles.paymentSummaryIconUnpaid,
+                ]}
+              >
+                <Ionicons
+                  name="cash-outline"
+                  size={22}
+                  color={latestIsPaid ? "#059669" : "#dc2626"}
+                />
+              </View>
+              <View style={styles.paymentSummaryTextBlock}>
+                <Text style={styles.paymentSummaryTitle}>
+                  {latestIsPaid ? "Latest bill paid" : "Pending payment"}
+                </Text>
+                <Text style={styles.paymentSummaryAmount}>
+                  {latestIsPaid
+                    ? `Amount settled: $${latestEntry.PRICE.toFixed(2)}`
+                    : `Amount due: $${latestEntry.PRICE.toFixed(2)}`}
+                </Text>
+              </View>
+            </View>
+            {!latestIsPaid && (
+              <TouchableOpacity
+                style={styles.markLatestPaidButton}
+                onPress={() => handleMarkPaid(latestEntry.entry_id)}
+                disabled={markingPaidId != null}
+                accessibilityRole="button"
+                accessibilityLabel="Mark latest bill as paid"
+              >
+                {markingPaidId === latestEntry.entry_id ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.markLatestPaidButtonText}>Mark latest as paid</Text>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
         )}
 
         {/* Last Reading Card */}
@@ -293,6 +371,14 @@ export default function App() {
                 <Text style={styles.detailValue}>
                   ${latestEntry.PRICE.toFixed(2)}
                 </Text>
+                <Text
+                  style={[
+                    styles.paymentInlineStatus,
+                    latestIsPaid ? styles.paymentInlinePaid : styles.paymentInlineUnpaid,
+                  ]}
+                >
+                  {latestIsPaid ? "Paid" : "Payment pending"}
+                </Text>
               </View>
             </View>
           </View>
@@ -310,6 +396,59 @@ export default function App() {
             </View>
             <Text style={styles.detailUnit}>per m³</Text>
           </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Reading history</Text>
+          {historyNewestFirst.map((entry) => {
+            const paid = entry.PAID === 1;
+            return (
+              <View key={entry.entry_id} style={styles.historyRow}>
+                <View style={styles.historyRowMain}>
+                  {meterId == null || Number.isNaN(meterId) ? (
+                    <Text style={styles.historyMeterId}>Meter {entry.METER_ID}</Text>
+                  ) : null}
+                  <Text style={styles.historyDate}>
+                    {formatDate(entry.DATE_CURRENT)}
+                  </Text>
+                  <Text style={styles.historyPrice}>${entry.PRICE.toFixed(2)}</Text>
+                  <View
+                    style={[
+                      styles.historyChip,
+                      paid ? styles.historyChipPaid : styles.historyChipUnpaid,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.historyChipText,
+                        paid ? styles.historyChipTextPaid : styles.historyChipTextUnpaid,
+                      ]}
+                    >
+                      {paid ? "Paid" : "Unpaid"}
+                    </Text>
+                  </View>
+                </View>
+                {!paid && (
+                  <TouchableOpacity
+                    style={[
+                      styles.markRowPaidButton,
+                      markingPaidId === entry.entry_id && styles.markRowPaidButtonDisabled,
+                    ]}
+                    onPress={() => handleMarkPaid(entry.entry_id)}
+                    disabled={markingPaidId != null}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Mark reading ${entry.entry_id} as paid`}
+                  >
+                    {markingPaidId === entry.entry_id ? (
+                      <ActivityIndicator color="#ffffff" size="small" />
+                    ) : (
+                      <Text style={styles.markRowPaidButtonText}>Mark as paid</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+            );
+          })}
         </View>
 
         {/* History indicator */}
@@ -586,5 +725,133 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#ffffff",
+  },
+  paymentSummaryCard: {
+    borderWidth: 1,
+  },
+  paymentSummaryPaid: {
+    borderColor: "#a7f3d0",
+    backgroundColor: "#ecfdf5",
+  },
+  paymentSummaryUnpaid: {
+    borderColor: "#fecaca",
+    backgroundColor: "#fef2f2",
+  },
+  paymentSummaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  paymentSummaryIcon: {
+    padding: 10,
+    borderRadius: 12,
+  },
+  paymentSummaryIconPaid: {
+    backgroundColor: "#d1fae5",
+  },
+  paymentSummaryIconUnpaid: {
+    backgroundColor: "#fee2e2",
+  },
+  paymentSummaryTextBlock: {
+    flex: 1,
+  },
+  paymentSummaryTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1f2937",
+    marginBottom: 4,
+  },
+  paymentSummaryAmount: {
+    fontSize: 14,
+    color: "#4b5563",
+  },
+  markLatestPaidButton: {
+    marginTop: 14,
+    backgroundColor: "#059669",
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  markLatestPaidButtonText: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  paymentInlineStatus: {
+    marginTop: 6,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  paymentInlinePaid: {
+    color: "#059669",
+  },
+  paymentInlineUnpaid: {
+    color: "#dc2626",
+  },
+  historyRow: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  historyRowMain: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  historyMeterId: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#2563eb",
+    width: "100%",
+    marginBottom: 4,
+  },
+  historyDate: {
+    fontSize: 14,
+    color: "#4b5563",
+    flex: 1,
+    minWidth: 120,
+  },
+  historyPrice: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#1f2937",
+  },
+  historyChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  historyChipPaid: {
+    backgroundColor: "#d1fae5",
+  },
+  historyChipUnpaid: {
+    backgroundColor: "#fee2e2",
+  },
+  historyChipText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  historyChipTextPaid: {
+    color: "#059669",
+  },
+  historyChipTextUnpaid: {
+    color: "#b91c1c",
+  },
+  markRowPaidButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "#059669",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+  },
+  markRowPaidButtonDisabled: {
+    opacity: 0.7,
+  },
+  markRowPaidButtonText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "600",
   },
 });
