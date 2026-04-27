@@ -3,12 +3,14 @@ import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Keyboard,
   Modal,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
 } from "react-native";
 
@@ -104,20 +106,21 @@ export default function SignIn() {
   };
 
   return (
-    <View style={styles.container}>
-      <Image
-        style={styles.image}
-        source={require("../assets/images/logo.png")}
-        // placeholder={{ blurhash }}
-        contentFit="contain"
-      />
-      {loading ? (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color="#006699" />
-          <Text style={styles.loadingText}>Loading communities...</Text>
-        </View>
-      ) : (
-        <View style={styles.form}>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={styles.container}>
+        <Image
+          style={styles.image}
+          source={require("../assets/images/logo.png")}
+          // placeholder={{ blurhash }}
+          contentFit="contain"
+        />
+        {loading ? (
+          <View style={styles.loadingWrap}>
+            <ActivityIndicator size="large" color="#006699" />
+            <Text style={styles.loadingText}>Loading communities...</Text>
+          </View>
+        ) : (
+          <View style={styles.form}>
           <Text style={styles.label}>Location</Text>
           <Pressable
             style={styles.dropdown}
@@ -152,13 +155,16 @@ export default function SignIn() {
               {submitting ? "Checking..." : "Log In"}
             </Text>
           </TouchableOpacity>
-        </View>
-      )}
+          </View>
+        )}
 
-      <Modal visible={pickerOpen} transparent animationType="fade">
+        <Modal visible={pickerOpen} transparent animationType="fade">
         <Pressable
           style={styles.modalBackdrop}
-          onPress={() => setPickerOpen(false)}
+          onPress={() => {
+            Keyboard.dismiss();
+            setPickerOpen(false);
+          }}
         >
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Select Location</Text>
@@ -179,8 +185,9 @@ export default function SignIn() {
             ))}
           </View>
         </Pressable>
-      </Modal>
-    </View>
+        </Modal>
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 

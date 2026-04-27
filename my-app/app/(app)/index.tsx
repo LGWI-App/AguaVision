@@ -11,11 +11,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-<<<<<<< HEAD
-import { useState } from "react";
-import { supabase } from "../../lib/supabase";
-=======
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   getLastReadingForMeter,
   getCommunityPriceRate,
@@ -26,7 +22,6 @@ import {
 } from "../../lib/db";
 import { requestCloudBackup } from "../../lib/supabase-backup";
 import { useLocalSearchParams, useRouter } from "expo-router";
->>>>>>> 9488667de9c98ad05ac0046f530c814c18d097f9
 import { Ionicons } from "@expo/vector-icons";
 import { OcrDemo } from "../../components/OcrDemo";
 
@@ -38,25 +33,36 @@ export default function MeterSubmission() {
   const [meterId, setMeterId] = useState<string>("");
   const [reading, setReading] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
-<<<<<<< HEAD
   const [showOcrDemo, setShowOcrDemo] = useState(false);
-  const USER_COMMUNITY_ID = 2;
-=======
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [processingOCR, setProcessingOCR] = useState(false);
-  const [showCamera, setShowCamera] = useState(false);
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const cameraRef = useRef<CameraView>(null);
+  const [ocrPreviousReading, setOcrPreviousReading] = useState(0);
 
   useEffect(() => {
     if (meterIdParam != null && String(meterIdParam).trim() !== "") {
       setMeterId(String(meterIdParam).trim());
     }
   }, [meterIdParam]);
->>>>>>> 9488667de9c98ad05ac0046f530c814c18d097f9
 
-  function handleOpenOcr() {
-    setShowOcrDemo(true);
+  async function handleOpenOcr() {
+    const id = parseInt(meterId, 10);
+    if (!id || Number.isNaN(id)) {
+      Alert.alert(
+        "Meter ID required",
+        "Enter a valid meter ID before scanning so we can compare against your last reading."
+      );
+      return;
+    }
+    try {
+      const communityId = getActiveCommunityId();
+      const lastRow = await getLastReadingForMeter(id, communityId);
+      const prev = lastRow ? Number(lastRow.CURRENT_READING) : 0;
+      setOcrPreviousReading(prev);
+      setShowOcrDemo(true);
+    } catch (err: any) {
+      Alert.alert(
+        "Could not load last reading",
+        err?.message ?? "Try again or enter the reading manually."
+      );
+    }
   }
 
   async function handleSubmit() {
@@ -77,7 +83,7 @@ export default function MeterSubmission() {
           meterId: String(id),
           reading: String(current),
         }).toString();
-        router.push(`/add_meter?${q}` as const);
+        router.push(`/add_meter?${q}` as Parameters<typeof router.push>[0]);
         return;
       }
 
@@ -237,6 +243,7 @@ export default function MeterSubmission() {
 
       <OcrDemo
         visible={showOcrDemo}
+        previousReading={ocrPreviousReading}
         onClose={() => setShowOcrDemo(false)}
         onReadingDetected={(r) => {
           setReading(r);
