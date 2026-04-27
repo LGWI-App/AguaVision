@@ -21,6 +21,8 @@ export interface OcrDemoProps {
   visible: boolean;
   onClose: () => void;
   onReadingDetected: (reading: string) => void;
+  /** Only candidates strictly greater than this are offered (matches submit validation). */
+  previousReading: number;
 }
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -29,6 +31,8 @@ const SCREEN_HEIGHT = Dimensions.get("window").height;
 const FRAME_HEIGHT = 64;
 const FRAME_WIDTH = Math.round(SCREEN_WIDTH * 0.72);
 const MAX_CANDIDATES = 3;
+/** Score and rank this many values before filtering by previous reading. */
+const SCORING_POOL = 24;
 
 function scoreCandidate(value: string): number {
   let score = 0;
@@ -72,14 +76,25 @@ function extractReadingCandidates(ocrResult: any): string[] {
   return unique
     .map((value) => ({ value, score: scoreCandidate(value) }))
     .sort((a, b) => b.score - a.score)
-    .slice(0, MAX_CANDIDATES)
+    .slice(0, SCORING_POOL)
     .map((item) => item.value);
+}
+
+function filterCandidatesAbovePrevious(
+  candidates: string[],
+  previousReading: number
+): string[] {
+  return candidates.filter((c) => {
+    const n = Number(c);
+    return !Number.isNaN(n) && n > previousReading;
+  });
 }
 
 export function OcrDemo({
   visible,
   onClose,
   onReadingDetected,
+  previousReading,
 }: OcrDemoProps) {
   const [processing, setProcessing] = useState(false);
   const [showCameraView, setShowCameraView] = useState(false);
@@ -112,10 +127,20 @@ export function OcrDemo({
   }
 
   function applyOcrResult(ocrResult: any, noReadingMessage: string) {
-    const candidates = extractReadingCandidates(ocrResult);
+    const ranked = extractReadingCandidates(ocrResult);
+    const candidates = filterCandidatesAbovePrevious(
+      ranked,
+      previousReading
+    ).slice(0, MAX_CANDIDATES);
 
     if (candidates.length === 0) {
-      Alert.alert("No Reading Detected", noReadingMessage, [{ text: "OK" }]);
+      Alert.alert(
+        "No Valid Reading",
+        ranked.length === 0
+          ? noReadingMessage
+          : `The reading must be greater than your last reading (${previousReading}). Try again or enter the value manually.`,
+        [{ text: "OK" }]
+      );
       return;
     }
 

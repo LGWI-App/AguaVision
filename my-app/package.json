@@ -12,11 +12,8 @@
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
-<<<<<<< HEAD
-    "@react-native-ml-kit/text-recognition": "^2.0.0",
-=======
     "@react-native-community/netinfo": "^11.4.1",
->>>>>>> 9488667de9c98ad05ac0046f530c814c18d097f9
+    "@react-native-ml-kit/text-recognition": "^2.0.0",
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
