@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import {
   clearAllData,
-  getMetersByCommunity,
+  getMetersByCommunityWithLatestPaid,
   getActiveCommunityId,
 } from "../../lib/db";
 import { Ionicons } from "@expo/vector-icons";
@@ -26,6 +26,8 @@ type Meter = {
   communityId: number;
   lastReadDate: string | null;
   latestReading: number | null;
+  /** null = no readings yet; true/false from latest row PAID */
+  latestPaid: boolean | null;
 };
 
 export default function MetersPage() {
@@ -38,7 +40,9 @@ export default function MetersPage() {
   const fetchData = useCallback(async () => {
     try {
       setError(null);
-      const data = await getMetersByCommunity(getActiveCommunityId());
+      const data = await getMetersByCommunityWithLatestPaid(
+        getActiveCommunityId(),
+      );
 
       const formatted: Meter[] = data.map((r) => ({
         id: String(r.METER_ID),
@@ -47,6 +51,10 @@ export default function MetersPage() {
         communityId: r.COMMUNITY_ID,
         lastReadDate: r.LAST_READ_DATE ?? null,
         latestReading: r.LATEST_READING ?? null,
+        latestPaid:
+          r.LATEST_READING_PAID == null
+            ? null
+            : Number(r.LATEST_READING_PAID) === 1,
       }));
 
       setMeters(formatted);
@@ -193,6 +201,34 @@ export default function MetersPage() {
                       <Text style={styles.household}>{item.household}</Text>
                     </View>
                   </View>
+                  <View style={styles.cardHeaderRight}>
+                    <View
+                      style={[
+                        styles.paymentIconWrap,
+                        item.latestPaid === true && styles.paymentIconPaid,
+                        item.latestPaid === false && styles.paymentIconUnpaid,
+                        item.latestPaid === null && styles.paymentIconNeutral,
+                      ]}
+                      accessibilityLabel={
+                        item.latestPaid === null
+                          ? "No bill recorded"
+                          : item.latestPaid
+                            ? "Latest bill paid"
+                            : "Latest bill pending payment"
+                      }
+                    >
+                      <Ionicons
+                        name="cash-outline"
+                        size={18}
+                        color={
+                          item.latestPaid === true
+                            ? "#059669"
+                            : item.latestPaid === false
+                              ? "#dc2626"
+                              : "#94a3b8"
+                        }
+                      />
+                    </View>
                   <View
                     style={[
                       styles.statusBadge,
@@ -212,6 +248,7 @@ export default function MetersPage() {
                     >
                       {isToday ? "Read Today" : "Pending"}
                     </Text>
+                  </View>
                   </View>
                 </View>
 
@@ -360,6 +397,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     flex: 1,
+  },
+  cardHeaderRight: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  paymentIconWrap: {
+    padding: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    backgroundColor: "#f9fafb",
+  },
+  paymentIconPaid: {
+    backgroundColor: "#d1fae5",
+    borderColor: "#a7f3d0",
+  },
+  paymentIconUnpaid: {
+    backgroundColor: "#fee2e2",
+    borderColor: "#fecaca",
+  },
+  paymentIconNeutral: {
+    backgroundColor: "#f3f4f6",
+    borderColor: "#e5e7eb",
   },
   meterIconContainer: {
     backgroundColor: "#dbeafe",

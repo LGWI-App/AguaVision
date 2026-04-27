@@ -27,10 +27,15 @@ create table if not exists public."METER_READINGS" (
   "PRICE" double precision not null default 0,
   "DATE_LAST_READ" text,
   "DATE_CURRENT" text not null,
-  "LAST_READING" double precision not null default 0
+  "LAST_READING" double precision not null default 0,
+  "PAID" integer not null default 0
 );
 
 -- If you already created "METER_READINGS" without "COMMUNITY_ID", run:
 -- alter table public."METER_READINGS"
 --   add column if not exists "COMMUNITY_ID" bigint not null default 2 references public."COMMUNITY" ("COMMUNITY_ID");
+
+-- If "METER_READINGS" exists without "PAID", run:
+-- alter table public."METER_READINGS"
+--   add column if not exists "PAID" integer not null default 0;
 

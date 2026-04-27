@@ -62,6 +62,7 @@ async function initSchema(database: SQLite.SQLiteDatabase) {
       DATE_LAST_READ TEXT,
       DATE_CURRENT TEXT NOT NULL,
       LAST_READING REAL NOT NULL DEFAULT 0,
+      PAID INTEGER NOT NULL DEFAULT 0,
       FOREIGN KEY (METER_ID) REFERENCES METERS(METER_ID),
       FOREIGN KEY (COMMUNITY_ID) REFERENCES COMMUNITY(COMMUNITY_ID)
     );
@@ -70,6 +71,7 @@ async function initSchema(database: SQLite.SQLiteDatabase) {
     "INSERT OR IGNORE INTO COMMUNITY (COMMUNITY_ID, PRICE_RATE) VALUES (2, 0.01)",
   );
   await migrateMeterReadingsAddCommunityId(database);
+  await migrateMeterReadingsAddPaid(database);
 }
 
 /** Existing DBs: add COMMUNITY_ID column (defaults to 2). */
@@ -84,6 +86,24 @@ async function migrateMeterReadingsAddCommunityId(
     await database.execAsync(
       `ALTER TABLE METER_READINGS ADD COLUMN COMMUNITY_ID INTEGER NOT NULL DEFAULT ${DEFAULT_COMMUNITY_ID};`,
     );
+  }
+}
+
+/**
+ * Existing DBs: add PAID (0 = unpaid, 1 = paid). New readings insert PAID = 0.
+ * After adding the column, mark all pre-existing rows paid so legacy data does not
+ * show every meter as owing back-bills.
+ */
+async function migrateMeterReadingsAddPaid(database: SQLite.SQLiteDatabase) {
+  const cols = await database.getAllAsync<{ name: string }>(
+    "PRAGMA table_info(METER_READINGS)",
+  );
+  const hasPaid = (cols ?? []).some((c) => c.name === "PAID");
+  if (!hasPaid) {
+    await database.execAsync(
+      "ALTER TABLE METER_READINGS ADD COLUMN PAID INTEGER NOT NULL DEFAULT 0;",
+    );
+    await database.execAsync("UPDATE METER_READINGS SET PAID = 1;");
   }
 }
 
@@ -157,8 +177,8 @@ export async function insertMeterReading(
 ): Promise<void> {
   const database = await getDb();
   await database.runAsync(
-    `INSERT INTO METER_READINGS (METER_ID, COMMUNITY_ID, CURRENT_READING, WATER_USED, PRICE, DATE_LAST_READ, DATE_CURRENT, LAST_READING)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO METER_READINGS (METER_ID, COMMUNITY_ID, CURRENT_READING, WATER_USED, PRICE, DATE_LAST_READ, DATE_CURRENT, LAST_READING, PAID)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
     [
       payload.METER_ID,
       payload.COMMUNITY_ID,
@@ -170,6 +190,18 @@ export async function insertMeterReading(
       payload.LAST_READING,
     ],
   );
+}
+
+/** Set payment flag for one reading row (0 = unpaid, 1 = paid). */
+export async function setMeterReadingPaid(
+  readingId: number,
+  paid: boolean,
+): Promise<void> {
+  const database = await getDb();
+  await database.runAsync("UPDATE METER_READINGS SET PAID = ? WHERE id = ?", [
+    paid ? 1 : 0,
+    readingId,
+  ]);
 }
 
 export async function updateMeterLatestReading(
@@ -265,6 +297,38 @@ export async function getMetersByCommunity(
   return rows ?? [];
 }
 
+/** Meters row plus latest reading's PAID for that meter in this community (null = no readings). */
+export type MeterRowWithLatestPaid = MeterRow & {
+  LATEST_READING_PAID: number | null;
+};
+
+export async function getMetersByCommunityWithLatestPaid(
+  communityId: number,
+): Promise<MeterRowWithLatestPaid[]> {
+  const database = await getDb();
+  const rows = await database.getAllAsync<MeterRowWithLatestPaid>(
+    `SELECT m.METER_ID, m.HOUSEHOLD_NAME, m.COMMUNITY_ID, m.ACTIVE, m.LAST_READ_DATE, m.LATEST_READING,
+            latest.PAID AS LATEST_READING_PAID
+     FROM METERS m
+     LEFT JOIN (
+       SELECT METER_ID, COMMUNITY_ID, PAID
+       FROM (
+         SELECT METER_ID, COMMUNITY_ID, PAID,
+           ROW_NUMBER() OVER (
+             PARTITION BY METER_ID, COMMUNITY_ID
+             ORDER BY DATE_CURRENT DESC, id DESC
+           ) AS rn
+         FROM METER_READINGS
+       ) ranked
+       WHERE rn = 1
+     ) latest ON latest.METER_ID = m.METER_ID AND latest.COMMUNITY_ID = m.COMMUNITY_ID
+     WHERE m.COMMUNITY_ID = ?
+     ORDER BY m.METER_ID`,
+    [communityId],
+  );
+  return rows ?? [];
+}
+
 export type MeterReadingRow = {
   id: number;
   METER_ID: number;
@@ -275,6 +339,7 @@ export type MeterReadingRow = {
   DATE_LAST_READ: string | null;
   DATE_CURRENT: string;
   LAST_READING: number;
+  PAID: number;
 };
 
 export async function getAllMeterReadingsOrderedByDate(): Promise<
@@ -282,7 +347,7 @@ export async function getAllMeterReadingsOrderedByDate(): Promise<
 > {
   const database = await getDb();
   const rows = await database.getAllAsync<MeterReadingRow>(
-    "SELECT id, METER_ID, COMMUNITY_ID, CURRENT_READING, WATER_USED, PRICE, DATE_LAST_READ, DATE_CURRENT, LAST_READING FROM METER_READINGS ORDER BY DATE_CURRENT ASC",
+    "SELECT id, METER_ID, COMMUNITY_ID, CURRENT_READING, WATER_USED, PRICE, DATE_LAST_READ, DATE_CURRENT, LAST_READING, PAID FROM METER_READINGS ORDER BY DATE_CURRENT ASC",
   );
   return rows ?? [];
 }
@@ -313,7 +378,7 @@ export async function getAllMeters(): Promise<MeterRow[]> {
 export async function getAllMeterReadings(): Promise<MeterReadingRow[]> {
   const database = await getDb();
   const rows = await database.getAllAsync<MeterReadingRow>(
-    "SELECT id, METER_ID, COMMUNITY_ID, CURRENT_READING, WATER_USED, PRICE, DATE_LAST_READ, DATE_CURRENT, LAST_READING FROM METER_READINGS ORDER BY id",
+    "SELECT id, METER_ID, COMMUNITY_ID, CURRENT_READING, WATER_USED, PRICE, DATE_LAST_READ, DATE_CURRENT, LAST_READING, PAID FROM METER_READINGS ORDER BY id",
   );
   return rows ?? [];
 }
@@ -377,8 +442,8 @@ export async function replaceLocalCommunitySnapshot(
 
   for (const row of safeReadings) {
     await database.runAsync(
-      `INSERT INTO METER_READINGS (id, METER_ID, COMMUNITY_ID, CURRENT_READING, WATER_USED, PRICE, DATE_LAST_READ, DATE_CURRENT, LAST_READING)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO METER_READINGS (id, METER_ID, COMMUNITY_ID, CURRENT_READING, WATER_USED, PRICE, DATE_LAST_READ, DATE_CURRENT, LAST_READING, PAID)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          METER_ID = excluded.METER_ID,
          COMMUNITY_ID = excluded.COMMUNITY_ID,
@@ -387,7 +452,8 @@ export async function replaceLocalCommunitySnapshot(
          PRICE = excluded.PRICE,
          DATE_LAST_READ = excluded.DATE_LAST_READ,
          DATE_CURRENT = excluded.DATE_CURRENT,
-         LAST_READING = excluded.LAST_READING`,
+         LAST_READING = excluded.LAST_READING,
+         PAID = excluded.PAID`,
       [
         row.id,
         row.METER_ID,
@@ -398,6 +464,7 @@ export async function replaceLocalCommunitySnapshot(
         row.DATE_LAST_READ,
         row.DATE_CURRENT,
         row.LAST_READING,
+        row.PAID,
       ],
     );
   }
