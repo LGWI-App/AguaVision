@@ -9,12 +9,9 @@ import {
   View,
   ScrollView,
   ActivityIndicator,
-  Image,
-  Modal,
-  Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   getLastReadingForMeter,
   getCommunityPriceRate,
@@ -26,11 +23,7 @@ import {
 import { requestCloudBackup } from "../../lib/supabase-backup";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker";
-import { CameraView, useCameraPermissions } from "expo-camera";
-import * as ImageManipulator from "expo-image-manipulator";
-import { performOCR, extractMeterReading } from "../../lib/google-vision";
-import { Linking, Platform } from "react-native";
+import { OcrDemo } from "../../components/OcrDemo";
 
 
 
@@ -40,11 +33,8 @@ export default function MeterSubmission() {
   const [meterId, setMeterId] = useState<string>("");
   const [reading, setReading] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [processingOCR, setProcessingOCR] = useState(false);
-  const [showCamera, setShowCamera] = useState(false);
-  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const cameraRef = useRef<CameraView>(null);
+  const [showOcrDemo, setShowOcrDemo] = useState(false);
+  const [ocrPreviousReading, setOcrPreviousReading] = useState(0);
 
   useEffect(() => {
     if (meterIdParam != null && String(meterIdParam).trim() !== "") {
@@ -52,252 +42,26 @@ export default function MeterSubmission() {
     }
   }, [meterIdParam]);
 
-  // Get API key from environment variable
-  const GOOGLE_VISION_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_VISION_API_KEY || "";
-
-  // Handle opening camera with scanning guide
-  async function handleOpenCamera() {
-    if (!cameraPermission) {
-      const permission = await requestCameraPermission();
-      if (!permission || !permission.granted) {
-        Alert.alert(
-          "Camera Permission Required",
-          "To capture meter readings, please enable camera access in your device settings.",
-          [
-            {
-              text: "Cancel",
-              style: "cancel",
-            },
-            {
-              text: "Open Settings",
-              onPress: () => {
-                if (Platform.OS === "ios") {
-                  Linking.openURL("app-settings:");
-                } else {
-                  Linking.openSettings();
-                }
-              },
-            },
-          ]
-        );
-        return;
-      }
-    } else if (!cameraPermission.granted) {
+  async function handleOpenOcr() {
+    const id = parseInt(meterId, 10);
+    if (!id || Number.isNaN(id)) {
       Alert.alert(
-        "Camera Permission Required",
-        "To capture meter readings, please enable camera access in your device settings.",
-        [
-          {
-            text: "Cancel",
-            style: "cancel",
-          },
-          {
-            text: "Open Settings",
-            onPress: () => {
-              if (Platform.OS === "ios") {
-                Linking.openURL("app-settings:");
-              } else {
-                Linking.openSettings();
-              }
-            },
-          },
-        ]
+        "Meter ID required",
+        "Enter a valid meter ID before scanning so we can compare against your last reading."
       );
       return;
     }
-    setShowCamera(true);
-  }
-
-  // Handle taking photo from custom camera
-  async function handleTakePicture() {
-    if (!cameraRef.current) return;
-
     try {
-      const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.8,
-        base64: false,
-      });
-
-      if (photo) {
-        // Get screen dimensions
-        const screenWidth = Dimensions.get("window").width;
-        const screenHeight = Dimensions.get("window").height;
-        
-        // Frame dimensions (matching styles: overlayMiddle and scanningFrame both have height: 50)
-        const overlayMiddleHeight = 50; // overlayMiddle height
-        const scanningFrameHeight = 50; // scanningFrame height (same as overlayMiddle)
-        const scanningFrameWidth = screenWidth; // scanningFrame is full width
-        
-        // Calculate the position of scanningFrame on screen
-        // Overlay structure: overlayTop (flex: 1) -> overlayMiddle (height: 50) -> overlayBottom (flex: 1)
-        // Since overlayTop and overlayBottom both have flex: 1, they split remaining space equally
-        const remainingHeight = screenHeight - overlayMiddleHeight;
-        const overlayTopHeight = remainingHeight / 2;
-        // scanningFrame Y position on screen (from top of screen)
-        const scanningFrameY = overlayTopHeight;
-        
-        // Get image dimensions using Image.getSize
-        const getImageSize = (): Promise<{ width: number; height: number }> => {
-          return new Promise((resolve, reject) => {
-            Image.getSize(
-              photo.uri,
-              (width, height) => resolve({ width, height }),
-              (error) => reject(error)
-            );
-          });
-        };
-        
-        const { width: imageWidth, height: imageHeight } = await getImageSize();
-        
-        // Calculate the crop region by mapping screen coordinates to image coordinates
-        // Calculate scale factors
-        const scaleX = imageWidth / screenWidth;
-        const scaleY = imageHeight / screenHeight;
-        
-        // Map scanningFrame dimensions and position to image coordinates
-        const cropWidth = scanningFrameWidth * scaleX; // Full width of image
-        const cropHeight = scanningFrameHeight * scaleY; // 50px mapped to image height
-        const cropX = 0; // Frame starts at left edge
-        const cropY = scanningFrameY * scaleY; // Map screen Y position to image Y position
-        
-        // Crop the image to match exactly what's visible in the scanningFrame
-        const croppedImage = await ImageManipulator.manipulateAsync(
-          photo.uri,
-          [
-            {
-              crop: {
-                originX: Math.round(cropX),
-                originY: Math.round(cropY),
-                width: Math.round(cropWidth),
-                height: Math.round(cropHeight),
-              },
-            },
-          ],
-          {
-            compress: 0.8,
-            format: ImageManipulator.SaveFormat.JPEG,
-          }
-        );
-
-        setCapturedImage(croppedImage.uri);
-        setShowCamera(false);
-        await processImageWithOCR(croppedImage.uri);
-      }
-    } catch (error) {
-      console.error("Camera capture error:", error);
-      Alert.alert("Error", "Failed to capture image.");
-    }
-  }
-
-  // Handle image capture/selection
-  async function handleCaptureImage() {
-    // Check gallery permission (usually granted by default, but check anyway)
-    const galleryPermission = await ImagePicker.getMediaLibraryPermissionsAsync();
-    
-    // Show action sheet to choose camera or gallery
-    Alert.alert(
-      "Select Image",
-      "Choose an option",
-      [
-        {
-          text: "Camera",
-          onPress: handleOpenCamera,
-        },
-        {
-          text: "Gallery",
-          onPress: async () => {
-            // Request gallery permission if needed
-            if (galleryPermission.status !== "granted") {
-              const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-              if (status !== "granted") {
-                Alert.alert(
-                  "Permission Required",
-                  "Photo library permission is required to select images.",
-                  [
-                    {
-                      text: "Cancel",
-                      style: "cancel",
-                    },
-                    {
-                      text: "Open Settings",
-                      onPress: () => {
-                        if (Platform.OS === "ios") {
-                          Linking.openURL("app-settings:");
-                        } else {
-                          Linking.openSettings();
-                        }
-                      },
-                    },
-                  ]
-                );
-                return;
-              }
-            }
-
-            try {
-              const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true,
-                aspect: [4, 3],
-                quality: 0.8,
-                base64: false,
-              });
-
-              if (!result.canceled && result.assets[0]) {
-                setCapturedImage(result.assets[0].uri);
-                await processImageWithOCR(result.assets[0].uri);
-              }
-            } catch (error) {
-              console.error("Gallery error:", error);
-              Alert.alert("Error", "Failed to select image.");
-            }
-          },
-        },
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-      ],
-      { cancelable: true }
-    );
-  }
-
-  // Process image with OCR
-  async function processImageWithOCR(imageUri: string) {
-    if (!GOOGLE_VISION_API_KEY) {
+      const communityId = getActiveCommunityId();
+      const lastRow = await getLastReadingForMeter(id, communityId);
+      const prev = lastRow ? Number(lastRow.CURRENT_READING) : 0;
+      setOcrPreviousReading(prev);
+      setShowOcrDemo(true);
+    } catch (err: any) {
       Alert.alert(
-        "Configuration Error",
-        "Google Vision API key is not configured. Please set EXPO_PUBLIC_GOOGLE_VISION_API_KEY in your environment variables."
+        "Could not load last reading",
+        err?.message ?? "Try again or enter the reading manually."
       );
-      return;
-    }
-
-    setProcessingOCR(true);
-    try {
-      const ocrResult = await performOCR(imageUri, GOOGLE_VISION_API_KEY);
-      const extractedReading = extractMeterReading(ocrResult.text);
-
-      if (extractedReading !== null) {
-        setReading(extractedReading.toString());
-        Alert.alert(
-          "OCR Success",
-          `Detected reading: ${extractedReading}\n\nFull text: ${ocrResult.text.substring(0, 100)}${ocrResult.text.length > 100 ? "..." : ""}`,
-          [{ text: "OK" }]
-        );
-      } else {
-        Alert.alert(
-          "No Reading Detected",
-          `Could not extract a meter reading from the image.\n\nDetected text: ${ocrResult.text.substring(0, 200)}${ocrResult.text.length > 200 ? "..." : ""}\n\nPlease enter the reading manually.`
-        );
-      }
-    } catch (error: any) {
-      console.error("OCR processing error:", error);
-      Alert.alert(
-        "OCR Error",
-        `Failed to process image: ${error.message || "Unknown error"}\n\nPlease enter the reading manually.`
-      );
-    } finally {
-      setProcessingOCR(false);
     }
   }
 
@@ -319,7 +83,7 @@ export default function MeterSubmission() {
           meterId: String(id),
           reading: String(current),
         }).toString();
-        router.push(`/add_meter?${q}` as const);
+        router.push(`/add_meter?${q}` as Parameters<typeof router.push>[0]);
         return;
       }
 
@@ -426,32 +190,15 @@ export default function MeterSubmission() {
                   onChangeText={setReading}
                 />
                 <Pressable
-                  onPress={handleCaptureImage}
-                  disabled={processingOCR}
+                  onPress={handleOpenOcr}
                   style={({ pressed }) => [
                     styles.cameraButton,
                     pressed && styles.cameraButtonPressed,
-                    processingOCR && styles.cameraButtonDisabled,
                   ]}
                 >
-                  {processingOCR ? (
-                    <ActivityIndicator size="small" color="#2563eb" />
-                  ) : (
-                    <Ionicons name="camera" size={24} color="#2563eb" />
-                  )}
+                  <Ionicons name="camera" size={24} color="#2563eb" />
                 </Pressable>
               </View>
-              {capturedImage && (
-                <View style={styles.imagePreview}>
-                  <Image source={{ uri: capturedImage }} style={styles.previewImage} />
-                  <Pressable
-                    onPress={() => setCapturedImage(null)}
-                    style={styles.removeImageButton}
-                  >
-                    <Ionicons name="close-circle" size={24} color="#ef4444" />
-                  </Pressable>
-                </View>
-              )}
               <Text style={styles.helperText}>
                 Tap the camera icon to capture or select a photo of your meter
               </Text>
@@ -494,64 +241,15 @@ export default function MeterSubmission() {
         </ScrollView>
       </TouchableWithoutFeedback>
 
-      {/* Camera Modal with Scanning Guide */}
-      <Modal
-        visible={showCamera}
-        animationType="slide"
-        onRequestClose={() => setShowCamera(false)}
-      >
-        <View style={styles.cameraContainer}>
-          <CameraView
-            ref={cameraRef}
-            style={styles.camera}
-            facing="back"
-          >
-            {/* Scanning Guide Overlay */}
-            <View style={styles.overlay}>
-              {/* Top overlay */}
-              <View style={styles.overlayTop} />
-              
-              {/* Middle section with scanning frame */}
-              <View style={styles.overlayMiddle}>
-                <View style={styles.overlaySide} />
-                <View style={styles.scanningFrame}>
-                  <View style={[styles.corner, styles.topLeft]} />
-                  <View style={[styles.corner, styles.topRight]} />
-                  <View style={[styles.corner, styles.bottomLeft]} />
-                  <View style={[styles.corner, styles.bottomRight]} />
-                </View>
-                <View style={styles.overlaySide} />
-              </View>
-              
-              {/* Bottom overlay */}
-              <View style={styles.overlayBottom}>
-                <Text style={styles.scanningHint}>
-                  Align the meter reading within the frame
-                </Text>
-              </View>
-            </View>
-
-            {/* Camera Controls */}
-            <View style={styles.cameraControls}>
-              <Pressable
-                onPress={() => setShowCamera(false)}
-                style={styles.cameraControlButton}
-              >
-                <Ionicons name="close" size={32} color="#ffffff" />
-              </Pressable>
-              
-              <Pressable
-                onPress={handleTakePicture}
-                style={styles.captureButton}
-              >
-                <View style={styles.captureButtonInner} />
-              </Pressable>
-              
-              <View style={styles.cameraControlButton} />
-            </View>
-          </CameraView>
-        </View>
-      </Modal>
+      <OcrDemo
+        visible={showOcrDemo}
+        previousReading={ocrPreviousReading}
+        onClose={() => setShowOcrDemo(false)}
+        onReadingDetected={(r) => {
+          setReading(r);
+          setShowOcrDemo(false);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -698,141 +396,10 @@ const styles = StyleSheet.create({
   cameraButtonPressed: {
     opacity: 0.7,
   },
-  cameraButtonDisabled: {
-    opacity: 0.5,
-  },
-  imagePreview: {
-    marginTop: 12,
-    position: "relative",
-    borderRadius: 12,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-  },
-  previewImage: {
-    width: "100%",
-    height: 200,
-    resizeMode: "cover",
-  },
-  removeImageButton: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    borderRadius: 12,
-    padding: 4,
-  },
   helperText: {
     fontSize: 12,
     color: "#6b7280",
     marginTop: 8,
     fontStyle: "italic",
-  },
-  cameraContainer: {
-    flex: 1,
-    backgroundColor: "#000000",
-  },
-  camera: {
-    flex: 1,
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: "transparent",
-  },
-  overlayTop: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-  },
-  overlayMiddle: {
-    flexDirection: "row",
-    height: 50,
-  },
-  overlaySide: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-  },
-  scanningFrame: {
-    width: Dimensions.get("window").width,
-    height: 50,
-    position: "relative",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  corner: {
-    position: "absolute",
-    width: 30,
-    height: 30,
-    borderColor: "#2563eb",
-    borderWidth: 3,
-  },
-  topLeft: {
-    top: 0,
-    left: 0,
-    borderRightWidth: 0,
-    borderBottomWidth: 0,
-  },
-  topRight: {
-    top: 0,
-    right: 0,
-    borderLeftWidth: 0,
-    borderBottomWidth: 0,
-  },
-  bottomLeft: {
-    bottom: 0,
-    left: 0,
-    borderRightWidth: 0,
-    borderTopWidth: 0,
-  },
-  bottomRight: {
-    bottom: 0,
-    right: 0,
-    borderLeftWidth: 0,
-    borderTopWidth: 0,
-  },
-  overlayBottom: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "flex-start",
-    alignItems: "center",
-    paddingTop: 20,
-  },
-  scanningHint: {
-    color: "#ffffff",
-    fontSize: 14,
-    fontWeight: "500",
-    textAlign: "center",
-  },
-  cameraControls: {
-    position: "absolute",
-    bottom: 40,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    justifyContent: "space-around",
-    alignItems: "center",
-    paddingHorizontal: 20,
-  },
-  cameraControlButton: {
-    width: 90,
-    height: 90,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  captureButton: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "#ffffff",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 4,
-    borderColor: "#2563eb",
-    marginBottom: 200,
-  },
-  captureButtonInner: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: "#2563eb",
   },
 });
